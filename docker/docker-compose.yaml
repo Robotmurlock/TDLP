@@ -1,0 +1,47 @@
+# Check docker/Dockerfile
+version: "3.9"
+services:
+  tdcp-env:
+    container_name: tdcp-env
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: tdcp-env
+    stdin_open: true
+    tty: true
+    command: bash
+
+    shm_size: 16gb
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: [ '${GPU}' ]
+              capabilities: [ gpu ]
+          cpus: '${CPUS:-1.0}'
+
+    volumes:
+      - '/tmp:/tmp'
+      - '${DATA}:/media/home'
+      - '${CODE:-$PWD}:/work'
+
+  tdcp-tensorboard:
+    container_name: tdcp-tensorboard
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: tdcp-env
+    stdin_open: true
+    tty: true
+    command: bash
+
+    shm_size: 16gb
+
+    ports:
+      - "56006:6006"
+      - "56007:6007"
+      - "56008:6008"
+
+    volumes:
+      - '${DATA}:/media/home'

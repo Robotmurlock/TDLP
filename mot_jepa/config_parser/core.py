@@ -13,7 +13,7 @@ from hydra.utils import instantiate
 from omegaconf import OmegaConf
 from pydantic.dataclasses import dataclass
 from torch import nn
-from torch._inductor.scheduler import Scheduler
+from torch.optim.lr_scheduler import LRScheduler
 from torch.optim.optimizer import Optimizer
 
 from mot_jepa.common import project, conventions
@@ -39,11 +39,8 @@ class DatasetReIDConfig:
 @dataclass
 class DatasetConfig:
     index: DatasetIndexConfig
-    vocabulary_size: int
     n_tracks: int
     clip_length: int
-    crop_width: int
-    crop_height: int
     min_clip_tracks: int = 1
     clip_sampling_step: int = 1
     val_clip_sampling_step: Optional[int] = None
@@ -64,15 +61,9 @@ class DatasetConfig:
 
         return MOTClipDataset(
             index=index,
-            vocabulary_size=self.vocabulary_size,
             n_tracks=self.n_tracks,
             clip_length=self.clip_length,
-            crop_width=self.crop_width,
-            crop_height=self.crop_height,
             clip_sampling_step=clip_sampling_step,
-            debug=self.debug,
-            debug_path=self.debug_path,
-            debug_max_crop_examples=self.debug_max_crop_examples,
             use_augmentation=not test,
             test=test
         )
@@ -111,7 +102,7 @@ class TrainConfig:
     def build_optimizer(self, params: Iterator[nn.Parameter]) -> Optimizer:
         return instantiate(OmegaConf.create(self.optimizer_config), params=params)
 
-    def build_scheduler(self, optimizer: Optimizer, epoch_steps: int) -> Scheduler:
+    def build_scheduler(self, optimizer: Optimizer, epoch_steps: int) -> LRScheduler:
         return instantiate(
             OmegaConf.create(self.scheduler_config),
             optimizer=optimizer,

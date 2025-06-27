@@ -1,0 +1,3 @@
+batch_size: 1
+accelerator: 'cuda:0'
+num_workers: 8

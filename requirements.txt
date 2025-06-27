@@ -11,6 +11,7 @@ scipy==1.10.1
 tqdm==4.64.1
 pydantic
 rich
+hydra-core
 --index-url https://download.pytorch.org/whl/cu118
 torch
 torchaudio

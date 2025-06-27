@@ -1,0 +1,11 @@
+defaults:
+  - global_config
+  - resources: default.yaml
+  - dataset: default.yaml
+  - train: default.yaml
+  - eval: default.yaml
+  - model: default.yaml
+  - path: default.yaml
+
+experiment_name: exp01-baseline
+dataset_name: DanceTrack
