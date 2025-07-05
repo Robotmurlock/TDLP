@@ -1,13 +1,12 @@
 import torch
 from torch import nn
-from mot_jepa.architectures.tdcp.detection_encoder import DetectionEncoder
-from mot_jepa.architectures.tdcp.track_encoder import TrackEncoder
-from mot_jepa.architectures.tdcp.projector import TrackToDetectionProjector
 from torch.nn import functional as F
-import numpy as np
 
+from mot_jepa.architectures.tdcp.detection_encoder import DetectionEncoder
+from mot_jepa.architectures.tdcp.projector import TrackToDetectionProjector
+from mot_jepa.architectures.tdcp.track_encoder import TrackEncoder
 
-TEMP_INIT = float(np.log(1 / 0.07))
+TEMP_INIT = 0.07
 
 
 class TrackDetectionContrastivePrediction(nn.Module):

@@ -6,5 +6,5 @@ optimizer_config:
   lr: 1e-3
 
 scheduler_config:
-  _target_: rt_motip.trainer.scheduler.create_warmup_cosine_annealing_scheduler
+  _target_: mot_jepa.trainer.scheduler.create_warmup_cosine_annealing_scheduler
   n_warmup_epochs: 1

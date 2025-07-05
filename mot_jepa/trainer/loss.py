@@ -20,14 +20,15 @@ class SymmetricContrastiveLossFunction(nn.Module):
         B, N, M = logits.shape
         assert N == M, f'Track and detection masks should match! Got {N=}, {M=}'
 
-        agg_track_mask = track_mask.all(dim=0)
+        agg_track_mask = track_mask.all(dim=-1)
+        mask = agg_track_mask | det_mask
 
         # Deduce labels
-        labels = torch.arange(N).to(logits).unsqueeze(0).repeat(B, 1)
+        labels = torch.arange(N).to(logits).unsqueeze(0).repeat(B, 1).long()
         track_labels = labels.clone()
         det_labels = labels.clone()
-        track_labels[agg_track_mask] = -100
-        det_labels[det_mask] = -100
+        track_labels[mask] = -100
+        det_labels[mask] = -100
 
         # Deduce predictions
         track_predictions = torch.argmax(logits, dim=1)
@@ -45,5 +46,61 @@ class SymmetricContrastiveLossFunction(nn.Module):
             'track_labels': track_labels,
             'det_labels': det_labels,
             'track_predictions': track_predictions,
-            'det_predictions': det_predictions
+            'det_predictions': det_predictions,
+            'track_mask': agg_track_mask,
+            'det_mask': det_mask
         }
+
+
+def run_test() -> None:
+    loss_fn = SymmetricContrastiveLossFunction()
+
+    logits = torch.tensor([
+        [
+            [1e9, 0, -1e9],
+            [0, 1e9, -1e9],
+            [0, 0, -1e9]
+        ],
+        [
+            [1e9, 0, 0],
+            [0, 1e9, 0],
+            [0, 0, 1e9]
+        ]
+    ], dtype=torch.float32)
+    # logits = torch.tensor([
+    #     [
+    #         [1e9, 0, -1e9],
+    #         [0, 1e9, -1e9],
+    #         [0, 0, -1e9]
+    #     ]
+    # ], dtype=torch.float32)
+    # logits = torch.tensor([
+    #     [
+    #         [1e9, 0, 0],
+    #         [0, 1e9, 0],
+    #         [1e-9, 1e-9, -1e9]
+    #     ]
+    # ], dtype=torch.float32)
+    # logits = torch.tensor([
+    #     [
+    #         [1e9, 0, 0],
+    #         [0, 1e9, 0],
+    #         [0, 0, 1e9]
+    #     ]
+    # ], dtype=torch.float32)
+
+    track_mask = torch.tensor([[[0, 0], [0, 0], [0, 0]], [[0, 0], [0, 0], [0, 0]]], dtype=torch.bool)
+    det_mask = torch.tensor([[0, 0, 1], [0, 0, 1]], dtype=torch.bool)
+    # track_mask = torch.tensor([[[0, 0], [0, 0], [1, 1]]], dtype=torch.bool)
+    # det_mask = torch.tensor([[0, 0, 0]], dtype=torch.bool)
+    # track_mask = torch.tensor([[[0, 0], [0, 0], [0, 0]]], dtype=torch.bool)
+    # det_mask = torch.tensor([[0, 0, 1]], dtype=torch.bool)
+    # track_mask = torch.tensor([[[0, 0], [0, 0], [1, 0]]], dtype=torch.bool)
+    # det_mask = torch.tensor([[0, 0, 0]], dtype=torch.bool)
+    loss = loss_fn(logits, track_mask, det_mask)
+
+    print(loss)
+
+
+if __name__ == '__main__':
+    run_test()

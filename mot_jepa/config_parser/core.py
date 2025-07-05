@@ -64,8 +64,7 @@ class DatasetConfig:
             n_tracks=self.n_tracks,
             clip_length=self.clip_length,
             clip_sampling_step=clip_sampling_step,
-            use_augmentation=not test,
-            test=test
+            use_augmentation=not test
         )
 
 
@@ -83,7 +82,7 @@ class ResourcesConfig:
 
 @dataclass
 class TrainCheckpointConfig:
-    metric_monitor: str = 'val/loss'
+    metric_monitor: str = 'val-epoch/loss'
     resume_from: Optional[str] = None
 
 

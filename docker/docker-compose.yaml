@@ -2,7 +2,7 @@
 version: "3.9"
 services:
   tdcp-env:
-    container_name: tdcp-env
+    container_name: ${TRAIN_CONT_NAME:-tdcp-env}
     build:
       context: ..
       dockerfile: docker/Dockerfile
@@ -27,7 +27,7 @@ services:
       - '${CODE:-$PWD}:/work'
 
   tdcp-tensorboard:
-    container_name: tdcp-tensorboard
+    container_name: ${TB_CONT_NAME:-tdcp-tensorboard}
     build:
       context: ..
       dockerfile: docker/Dockerfile

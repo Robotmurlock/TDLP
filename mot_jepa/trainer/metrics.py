@@ -1,7 +1,7 @@
 """
 Implementation of Metric meters compatible with distributed computation.
 """
-from typing import Union, Dict
+from typing import Union, Dict, Optional
 from abc import ABC, abstractmethod
 
 import torch
@@ -16,7 +16,7 @@ class Meter(ABC):
     Trainer metric meter interface.
     """
     @abstractmethod
-    def push(self, data: MeterTensor) -> MeterTensor:
+    def push(self, data: MeterTensor, **kwargs) -> MeterTensor:
         """
         Add the current loss to the total loss and increment the step count.
 
@@ -156,19 +156,22 @@ class AccuracyMeter(Meter):
         self._correct: torch.Tensor = torch.tensor(0.0, dtype=torch.long, device=device)
 
     @torch.no_grad()
-    def push(self, outputs: torch.Tensor, target: torch.Tensor) -> None:
+    def push(self, outputs: torch.Tensor, target: torch.Tensor, mask: Optional[torch.Tensor] = None) -> None:
         """
         Add the current batch's predictions and targets to the accuracy meter.
 
         Args:
             outputs: The predicted labels.
             target: The true labels.
+            mask: Mask
         """
-        outputs, target = outputs.detach(), target.detach()
-        _, prediction = outputs.max(-1)
+        if mask is not None:
+            outputs = outputs[~mask]
+            target = target[~mask]
+        outputs, target = outputs.detach().view(-1), target.detach().view(-1)
 
-        self._total += prediction.size(0)
-        self._correct += prediction.eq(target).sum()
+        self._total += outputs.size(0)
+        self._correct += outputs.eq(target).sum()
 
     @torch.no_grad()
     def aggregate_and_flush(self) -> float:

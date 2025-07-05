@@ -2,10 +2,10 @@ index:
   type: mot
   params:
     paths:
-      - /media/home/Dancetrack-orig/
+      - /media/home/DanceTrack-orig/
 
 n_tracks: 20
-clip_length: 10
+clip_length: 30
 min_clip_tracks: 1
 clip_sampling_step: 1
 val_clip_sampling_step: 10

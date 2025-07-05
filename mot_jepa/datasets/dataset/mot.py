@@ -34,11 +34,9 @@ class MOTClipDataset(Dataset):
         clip_length: int,
         min_clip_tracks: int = 1,
         clip_sampling_step: int = 1,
-        use_augmentation: bool = False,
-        test: bool = False,
+        use_augmentation: bool = False
     ):
         self._index = index
-        self._test = test
 
         # Track parameters
         max_tracks = index.get_max_tracks()
@@ -63,18 +61,6 @@ class MOTClipDataset(Dataset):
         # Augmentation configuraion
         self._use_augmentation = use_augmentation
 
-        """
-          diff_mean:
-        - 2.595039586594794e-05
-        - -4.062700099893846e-06
-        - 1.2572780178743415e-05
-        - 1.813911512726918e-05
-      diff_std:
-        - 0.0069142598658800125
-        - 0.010483947582542896
-        - 0.00903298705816269
-        - 0.010925708338618279
-        """
         self._mean = torch.tensor([-0.5, -0.5, -0.5, -0.5, 0, 0, 0, 0], dtype=torch.float32)
         self._std = torch.tensor([1, 1, 1, 1, 0.01, 0.01, 0.01, 0.01], dtype=torch.float32)
 
@@ -137,18 +123,9 @@ class MOTClipDataset(Dataset):
     def create_bbox(bbox: List[float], score: float) -> torch.Tensor:
         return torch.tensor([*bbox, score], dtype=torch.float32)
 
-    def transform_bbox(self, bbox: torch.Tensor, temporal_mask: torch.float, fod: bool) -> torch.Tensor:
+    def transform_bbox(self, bbox: torch.Tensor) -> torch.Tensor:
         if self._use_augmentation:
             bbox = self._bbox_augmentation(bbox)
-
-        bbox = bbox - 0.5  # Centralize
-
-        if fod:
-            bbox_fod = torch.zeros_like(bbox)
-            bbox_fod[:, 1:, :] = 10 * (bbox[:, 1:, :] - bbox[:, :-1, :])  # Scale
-            bbox_fod[:, 1:, :] = bbox_fod[:, 1:, :] * (1 - temporal_mask[:, :-1, :].float())
-            bbox = torch.cat([bbox, bbox_fod], dim=-1)
-
         return bbox
 
     def _extract_scene_clip_data(
@@ -167,7 +144,7 @@ class MOTClipDataset(Dataset):
             random.shuffle(object_ids)
             object_ids = object_ids[:self._n_tracks]
 
-        bboxes = torch.ones(self._n_tracks, temporal_length, self.BBOX_DIM, dtype=torch.float32)
+        bboxes = torch.zeros(self._n_tracks, temporal_length, self.BBOX_DIM, dtype=torch.float32)
         times = torch.arange(start_time, start_time + temporal_length, dtype=torch.long) \
             .unsqueeze(0).repeat(self._n_tracks, 1)
         temporal_mask = torch.ones(self._n_tracks, temporal_length, dtype=torch.bool)
@@ -183,7 +160,7 @@ class MOTClipDataset(Dataset):
 
                 # BBox
                 bbox = self.create_bbox(data.bbox, data.score)
-                bboxes[object_index, clip_index, :] = self.transform_bbox(bbox, temporal_mask=temporal_mask, fod=not remove_temporal_dim)
+                bboxes[object_index, clip_index, :] = self.transform_bbox(bbox)
 
         if remove_temporal_dim:
             assert temporal_length == 1, 'Can\'t remove temporal dim unless it has length of 1!'
@@ -196,34 +173,46 @@ class MOTClipDataset(Dataset):
     def __getitem__(self, index: int):
         scene_name, start_index, end_index = self._clip_index[index]
 
+        observed_end_index = start_index + self._clip_length
         observed_bboxes, observed_times, observed_temporal_mask = self._extract_scene_clip_data(
             scene_name=scene_name,
             start_index=start_index,
-            end_index=start_index + self._clip_length,
+            end_index=observed_end_index,
             start_time=0,
             temporal_length=self._clip_length
         )
 
+        # TODO
+        torch.set_printoptions(precision=2, sci_mode=None)
+        observed_bboxes[..., :2] = observed_bboxes[..., :2] - 0.5  # Centralize
+        observed_bboxes_fod = torch.zeros_like(observed_bboxes)
+        observed_bboxes_fod[:, 1:, :] = 10 * (observed_bboxes[:, 1:, :] - observed_bboxes[:, :-1, :])  # Scale
+        observed_bboxes_fod[:, 1:, :] = observed_bboxes_fod[:, 1:, :] * (1 - observed_temporal_mask[:, :-1].unsqueeze(-1).repeat(1, 1, observed_bboxes.shape[-1]).float())
+        observed_bboxes = torch.cat([observed_bboxes, observed_bboxes_fod], dim=-1)
+        observed_bboxes[observed_temporal_mask] = 0
+
         unobserved_bboxes, unobserved_times, unobserved_temporal_mask = self._extract_scene_clip_data(
             scene_name=scene_name,
-            start_index=start_index + 1,
-            end_index=start_index + self._clip_length + 1,
+            start_index=observed_end_index,
+            end_index=observed_end_index + 1,
             start_time=self._clip_length,
             temporal_length=1,
             remove_temporal_dim=True
         )
 
-        if not self._test:
-            observed_bboxes, observed_times, observed_temporal_mask, \
-                unobserved_bboxes, unobserved_times, unobserved_temporal_mask = \
-                    self._augment_trajectories(
-                        observed_bboxes=observed_bboxes,
-                        observed_times=observed_times,
-                        observed_temporal_mask=observed_temporal_mask,
-                        unobserved_bboxes=unobserved_bboxes,
-                        unobserved_times=unobserved_times,
-                        unobserved_temporal_mask=unobserved_temporal_mask
-                    )
+        unobserved_bboxes[..., :2] = unobserved_bboxes[..., :2] - 0.5
+        unobserved_bboxes[unobserved_temporal_mask] = 0
+
+        observed_bboxes, observed_times, observed_temporal_mask, \
+            unobserved_bboxes, unobserved_times, unobserved_temporal_mask = \
+                self._augment_trajectories(
+                    observed_bboxes=observed_bboxes,
+                    observed_times=observed_times,
+                    observed_temporal_mask=observed_temporal_mask,
+                    unobserved_bboxes=unobserved_bboxes,
+                    unobserved_times=unobserved_times,
+                    unobserved_temporal_mask=unobserved_temporal_mask
+                )
 
         return {
             'observed_bboxes': observed_bboxes,
@@ -262,6 +251,7 @@ class MOTClipDataset(Dataset):
         if traj_switch_ratio > 0.0:
             for t in range(0, self._clip_length):
                 switch_proba = torch.ones((self._n_tracks,), dtype=torch.float) * traj_switch_ratio
+                switch_proba = (1 - observed_temporal_mask.all(dim=-1).float()) * switch_proba
                 switch_map = torch.bernoulli(switch_proba)
                 switch_indices = torch.nonzero(switch_map)  # objects to switch
                 switch_indices = switch_indices.reshape((switch_indices.shape[0],))

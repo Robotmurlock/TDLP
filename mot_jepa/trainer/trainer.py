@@ -41,7 +41,7 @@ class ContrastiveTrainer:
         n_epochs: int,
         tensorboard_log_dirpath: str,
         checkpoints_dirpath: str,
-        metric_monitor: str = 'val/loss',
+        metric_monitor: str = 'val-epoch/loss',
         metric_monitor_minimize: bool = True,
         gradient_clip: Optional[float] = None
     ):
@@ -250,9 +250,9 @@ class ContrastiveTrainer:
             self._optimizer.step()
             self._scheduler.step()
 
-            track_accuracy_meter.push(loss_dict['track_predictions'], loss_dict['track_labels'])
-            det_accuracy_meter.push(loss_dict['det_predictions'], loss_dict['det_labels'])
-            step_metrics = loss_meter.push({k: v for k, v in loss_dict.items() if 'loss' in k})
+            track_accuracy_meter.push(loss_dict['track_predictions'], loss_dict['track_labels'], mask=loss_dict['track_mask'])
+            det_accuracy_meter.push(loss_dict['det_predictions'], loss_dict['det_labels'], mask=loss_dict['det_mask'])
+            step_metrics = loss_meter.push({f'train/{k}': v for k, v in loss_dict.items() if 'loss' in k})
             global_step = self._epoch * len(train_loader) + loss_meter.step
             # noinspection PyTypeChecker
             step_metrics['train/lr'] = self._optimizer.param_groups[0]['lr']
@@ -262,11 +262,12 @@ class ContrastiveTrainer:
                 verbose=False
             )
 
-        return {
-            'train/loss': loss_meter.aggregate_and_flush(),
-            'train/track-accuracy': track_accuracy_meter.aggregate_and_flush(),
-            'train/detection-accuracy': det_accuracy_meter.aggregate_and_flush(),
-        }
+        epoch_metrics = {k.replace('train/', 'train-epoch/'): v for k, v in loss_meter.aggregate_and_flush().items()}
+        epoch_metrics.update({
+            'train-epoch/track-accuracy': track_accuracy_meter.aggregate_and_flush(),
+            'train-epoch/detection-accuracy': det_accuracy_meter.aggregate_and_flush(),
+        })
+        return epoch_metrics
 
     def _eval_epoch(self, val_loader: 'DataLoader') -> Dict[str, float]:
         """
@@ -295,9 +296,9 @@ class ContrastiveTrainer:
             logits = self._model(track_bboxes, track_mask, det_bboxes, det_mask)
             loss_dict = self._loss_fn(logits, track_mask, det_mask)
 
-            track_accuracy_meter.push(loss_dict['track_predictions'], loss_dict['track_labels'])
-            det_accuracy_meter.push(loss_dict['det_predictions'], loss_dict['det_labels'])
-            step_metrics = loss_meter.push({k: v for k, v in loss_dict.items() if 'loss' in k})
+            track_accuracy_meter.push(loss_dict['track_predictions'], loss_dict['track_labels'], mask=loss_dict['track_mask'])
+            det_accuracy_meter.push(loss_dict['det_predictions'], loss_dict['det_labels'], mask=loss_dict['det_mask'])
+            step_metrics = loss_meter.push({f'val/{k}': v for k, v in loss_dict.items() if 'loss' in k})
             global_step = self._epoch * len(val_loader) + loss_meter.step
 
             self._log_metrics(
@@ -306,11 +307,12 @@ class ContrastiveTrainer:
                 verbose=False
             )
 
-        return {
-            'val/loss': loss_meter.aggregate_and_flush(),
-            'val/track-accuracy': track_accuracy_meter.aggregate_and_flush(),
-            'val/detection-accuracy': det_accuracy_meter.aggregate_and_flush(),
-        }
+        epoch_metrics = {k.replace('val/', 'val-epoch/'): v for k, v in loss_meter.aggregate_and_flush().items()}
+        epoch_metrics.update({
+            'val-epoch/track-accuracy': track_accuracy_meter.aggregate_and_flush(),
+            'val-epoch/detection-accuracy': det_accuracy_meter.aggregate_and_flush(),
+        })
+        return epoch_metrics
 
     @torch_distrib_utils.rank_zero_only
     def _save_checkpoint(self, val_metrics: Dict[str, float]) -> None:
