@@ -89,6 +89,7 @@ def main(cfg: GlobalConfig) -> None:
         state_dict = torch.load(cfg.train.checkpoint_cfg.resume_from)
         model.load_state_dict(state_dict['model'])
 
+    loss_func = cfg.train.build_loss_func()
     optimizer = cfg.train.build_optimizer(model.parameters())
     scheduler = cfg.train.build_scheduler(
         optimizer=optimizer,
@@ -101,6 +102,7 @@ def main(cfg: GlobalConfig) -> None:
     checkpoints_dirpath = conventions.get_checkpoints_dirpath(experiments_path)
     trainer = ContrastiveTrainer(
         model=model,
+        loss_func=loss_func,
         optimizer=optimizer,
         scheduler=scheduler,
 

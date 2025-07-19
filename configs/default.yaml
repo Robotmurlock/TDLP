@@ -7,5 +7,5 @@ defaults:
   - model: default.yaml
   - path: default.yaml
 
-experiment_name: exp11-TripletLoss-InfoNCE+MSELoss-StrongDetectionEncoder-XYXY-BatchLoss-RecalculatedStatsReproduce
+experiment_name: exp11-TripletLoss-InfoNCE+MSELoss-StrongDetectionEncoder-XYXY-BatchLoss-ReproduceLoss
 dataset_name: DanceTrack

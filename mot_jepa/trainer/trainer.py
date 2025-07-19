@@ -16,12 +16,12 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 from torch.utils.tensorboard import SummaryWriter
-from mot_jepa.common.conventions import LAST_CKPT
 
-# from mot_jepa.trainer.loss import SymmetricContrastiveLossFunction
-from mot_jepa.trainer.triplet_loss import ModifiedTripletLoss
+from mot_jepa.common.conventions import LAST_CKPT
 from mot_jepa.trainer import torch_distrib_utils
 from mot_jepa.trainer import torch_helper
+# from mot_jepa.trainer.loss import SymmetricContrastiveLossFunction
+from mot_jepa.trainer.losses.base import VideoClipLoss
 from mot_jepa.trainer.metrics import LossDictMeter, AccuracyMeter
 
 if TYPE_CHECKING:
@@ -37,6 +37,7 @@ class ContrastiveTrainer:
     def __init__(
         self,
         model: nn.Module,
+        loss_func: VideoClipLoss,
         optimizer: Optimizer,
         scheduler: LRScheduler,
         n_epochs: int,
@@ -68,8 +69,7 @@ class ContrastiveTrainer:
 
         # Trainer state
         self._model = model
-        # self._loss_fn = SymmetricContrastiveLossFunction()
-        self._loss_fn = ModifiedTripletLoss()
+        self._loss_func = loss_func
         self._optimizer = optimizer
         self._scheduler = scheduler
         self._metric_monitor = metric_monitor
@@ -245,7 +245,7 @@ class ContrastiveTrainer:
 
             self._optimizer.zero_grad()
             track_features, det_features = self._model(track_bboxes, track_mask, det_bboxes, det_mask)
-            loss_dict = self._loss_fn(track_features, det_features, track_mask, det_mask)
+            loss_dict = self._loss_func(track_features, det_features, track_mask, det_mask)
             loss_dict['loss'].backward()
             if self._gradient_clip is not None:
                 torch.nn.utils.clip_grad_norm_(self._model.parameters(), self._gradient_clip)
@@ -296,7 +296,7 @@ class ContrastiveTrainer:
             det_mask = data['unobserved_temporal_mask']
 
             track_features, det_features = self._model(track_bboxes, track_mask, det_bboxes, det_mask)
-            loss_dict = self._loss_fn(track_features, det_features, track_mask, det_mask)
+            loss_dict = self._loss_func(track_features, det_features, track_mask, det_mask)
 
             track_accuracy_meter.push(loss_dict['track_predictions'], loss_dict['track_labels'], mask=loss_dict['track_mask'])
             det_accuracy_meter.push(loss_dict['det_predictions'], loss_dict['det_labels'], mask=loss_dict['det_mask'])

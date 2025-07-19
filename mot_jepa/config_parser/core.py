@@ -93,6 +93,8 @@ class TrainCheckpointConfig:
 @dataclass
 class TrainConfig:
     max_epochs: int
+
+    loss_config: dict
     optimizer_config: dict
     scheduler_config: dict
 
@@ -111,6 +113,11 @@ class TrainConfig:
             optimizer=optimizer,
             epoch_steps=epoch_steps,
             epochs=self.max_epochs
+        )
+
+    def build_loss_func(self):
+        return instantiate(
+            OmegaConf.create(self.loss_config),
         )
 
 

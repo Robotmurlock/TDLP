@@ -16,7 +16,7 @@ class Meter(ABC):
     Trainer metric meter interface.
     """
     @abstractmethod
-    def push(self, data: MeterTensor, **kwargs) -> MeterTensor:
+    def push(self, data: torch.Tensor, **kwargs) -> torch.Tensor:
         """
         Add the current loss to the total loss and increment the step count.
 
@@ -25,7 +25,7 @@ class Meter(ABC):
         """
 
     @abstractmethod
-    def aggregate_and_flush(self) -> MeterTensor:
+    def aggregate_and_flush(self) -> float:
         """
         Aggregate the average loss across all processes and reset the meter.
 
@@ -58,7 +58,7 @@ class LossMeter(Meter):
         return self._steps
 
     @torch.no_grad()
-    def push(self, data: MeterTensor) -> MeterTensor:
+    def push(self, data: torch.Tensor) -> torch.Tensor:
         loss = data.detach()
 
         if self._sync and dist.is_initialized():
@@ -72,7 +72,7 @@ class LossMeter(Meter):
         return loss.item()
 
     @torch.no_grad()
-    def aggregate_and_flush(self) -> MeterTensor:
+    def aggregate_and_flush(self) -> float:
         assert self._steps > 0, 'Nothing to aggregate!'
 
         # Aggregate
