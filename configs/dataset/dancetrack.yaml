@@ -1,3 +1,9 @@
+defaults:
+  - transform: default.yaml
+  # - augmentations: default.yaml
+
+augmentations: null
+
 index:
   type: mot
   params:

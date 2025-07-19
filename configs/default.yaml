@@ -1,11 +1,11 @@
 defaults:
   - global_config
   - resources: default.yaml
-  - dataset: default.yaml
+  - dataset: dancetrack.yaml
   - train: default.yaml
   - eval: default.yaml
   - model: default.yaml
   - path: default.yaml
 
-experiment_name: exp11-TripletLoss-InfoNCE+MSELoss-StrongDetectionEncoder-XYXY-BatchLoss
+experiment_name: exp11-TripletLoss-InfoNCE+MSELoss-StrongDetectionEncoder-XYXY-BatchLoss-RecalculatedStatsReproduce
 dataset_name: DanceTrack

@@ -1,19 +1,14 @@
 import cv2
 import hydra
 import torch
+import torch.nn.functional as F
 
 from mot_jepa.architectures.tdcp import build_track_detection_contrastive_prediction_model
-from mot_jepa.common import conventions
 from mot_jepa.common.project import CONFIGS_PATH
 from mot_jepa.config_parser import GlobalConfig
 from mot_jepa.datasets.dataset import dataset_index_factory
 from mot_jepa.utils import pipeline
-import torch.nn.functional as F
 
-
-import torch
-
-import torch
 
 def bbox_iou_matrix_xywh(bboxes: torch.Tensor) -> torch.Tensor:
     """
@@ -83,9 +78,6 @@ def main(cfg: GlobalConfig) -> None:
     data = val_dataset[index]
     data = {k: v.unsqueeze(0).to(device) for k, v in data.items()}
     K = 8
-    for k, v in data.items():
-        print(k, v[0, :K])
-    print('-----------------------------')
     track_features, det_features = model(
         data['observed_bboxes'],
         data['observed_temporal_mask'],
@@ -99,8 +91,6 @@ def main(cfg: GlobalConfig) -> None:
     logits = track_features[:K] @ det_features[:K].T
 
     indices = logits.argmax(dim=1)
-    print(track_features[:K])
-    print(det_features[:K])
 
     print(logits[:K, :K])
     print(indices[:K])
@@ -108,7 +98,7 @@ def main(cfg: GlobalConfig) -> None:
     cv2.imwrite('/work/test.png', scene_image)
 
     raw = val_dataset.get_raw(index)
-    obs_bboxes = raw['observed_bboxes'][:K, -1, :-1]
+    obs_bboxes = raw.observed_bboxes[:K, -1, :-1]
     print(obs_bboxes)
     print(bbox_iou_matrix_xywh(obs_bboxes))
 
