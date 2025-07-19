@@ -1,9 +1,9 @@
-max_epochs: 10
-gradient_clip: 1.0
+max_epochs: 20
+gradient_clip: null
 
 optimizer_config:
   _target_: torch.optim.Adam
-  lr: 1e-3
+  lr: 1e-4
 
 scheduler_config:
   _target_: mot_jepa.trainer.scheduler.create_warmup_cosine_annealing_scheduler

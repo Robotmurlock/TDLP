@@ -58,12 +58,11 @@ class TrackEncoder(nn.Module):
         super().__init__()
         self._hidden_dim = hidden_dim
 
-        self._tokenizer = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.Dropout(dropout)
-        )
+        # self._tokenizer = nn.Sequential(
+        #     nn.Linear(input_dim, hidden_dim),
+        #     nn.Dropout(dropout)
+        # )
         self._pos_encoder = ReversedPositionalEncoding(hidden_dim)
-        self._ln = nn.LayerNorm(hidden_dim)
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=hidden_dim,
             nhead=n_heads,
@@ -84,27 +83,25 @@ class TrackEncoder(nn.Module):
         B = x.size(0)
 
         # Tokenize
-        x = self._tokenizer(x)  # (B, N, S, E)
         x = einops.rearrange(x, 'b n t e -> t (b n) e')
         masks = einops.rearrange(masks, 'b n t -> (b n) t')
 
+        # Transformer preprocess (position encoding and normalization)
+        x = self._pos_encoder(x)
+
         # Expand and prepend CLS token
         cls_token = self.cls_token.expand(1, B * N, -1)  # (1, N * B, E)
-        x = torch.cat([cls_token, x], dim=0)  # (T + 1, N * B, E)
+        x = torch.cat([x, cls_token], dim=0)  # (T + 1, N * B, E)
 
         # Adjust masks to account for added CLS token (set to False -> not masked)
         cls_mask = torch.zeros(B * N, 1, dtype=torch.bool, device=masks.device)
-        masks = torch.cat([cls_mask, masks], dim=1)  # (T + 1, B * N)
-
-        # Transformer preprocess (position encoding and normalization)
-        x = self._pos_encoder(x)
-        x = self._ln(x)
+        masks = torch.cat([masks, cls_mask], dim=1)  # (T + 1, B * N)
 
         # Transformer
         x = self._encoder(x, src_key_padding_mask=masks)
 
         x = einops.rearrange(x, 't (b n) e -> b n t e', b=B, n=N)
-        return x[:, :, 0, :]  # Return CLS token output
+        return x[:, :, -1, :]  # Return CLS token output
 
 
 def run_test() -> None:

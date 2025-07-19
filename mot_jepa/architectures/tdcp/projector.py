@@ -9,7 +9,7 @@ class TrackToDetectionProjector(nn.Module):
             nn.Linear(hidden_dim, intermediate_hidden_dim),
             nn.LayerNorm(intermediate_hidden_dim),
             nn.SiLU(),
-            nn.Linear(intermediate_hidden_dim, hidden_dim),
+            nn.Linear(intermediate_hidden_dim, hidden_dim)
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

@@ -196,7 +196,7 @@ class DatasetIndex(ABC):
             object_ids = self.get_objects_present_in_scene_at_frame(scene_name, frame_index)
             all_object_ids.extend(object_ids)
 
-        return list(set(all_object_ids))
+        return sorted(list(set(all_object_ids)))
 
     def get_max_tracks(self) -> int:
         """

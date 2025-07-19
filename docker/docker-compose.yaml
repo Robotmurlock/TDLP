@@ -30,13 +30,12 @@ services:
     container_name: ${TB_CONT_NAME:-tdcp-tensorboard}
     build:
       context: ..
-      dockerfile: docker/Dockerfile
-    image: tdcp-env
+      dockerfile: docker/tensorboard.Dockerfile
+    image: tdcp-tensorboard
     stdin_open: true
     tty: true
-    command: bash
 
-    shm_size: 16gb
+    shm_size: 4gb
 
     ports:
       - "56006:6006"
@@ -44,4 +43,4 @@ services:
       - "56008:6008"
 
     volumes:
-      - '${DATA}:/media/home'
+      - '${TB_LOGS}:/tb_logs'

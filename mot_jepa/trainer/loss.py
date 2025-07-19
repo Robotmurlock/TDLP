@@ -7,16 +7,29 @@ from typing import Dict
 
 class SymmetricContrastiveLossFunction(nn.Module):
     # noinspection PyMethodMayBeStatic
-    def forward(self, logits: torch.Tensor, track_mask: torch.Tensor, det_mask: torch.Tensor) -> Dict[str, torch.Tensor]:
+    def forward(self, track_features: torch.Tensor, det_features: torch.Tensor, track_mask: torch.Tensor, det_mask: torch.Tensor) -> Dict[str, torch.Tensor]:
         """
         Args:
-            logits: (B, N, M) similarity matrix
+            track_features: (B, N, E)
+            det_features: (B, M, E)
             track_mask: (T, B, N), 1 = missing
             det_mask: (B, M), 1 = missing
 
         Returns:
             Scalar contrastive loss
         """
+        # Compute logits
+        # projected_features = F.normalize(projected_features, dim=-1)  # (B, N1, E)
+        # det_features = F.normalize(det_features, dim=-1)  # (B, N2, E)
+        logits = torch.bmm(track_features, det_features.transpose(1, 2))  # (B, N1, N2)
+        # if self.training:
+        #     logits = logits / self._temp
+
+        # Adjust masked logits
+        track_mask_agg = track_mask.all(dim=-1)  # (B, N1)
+        combined_mask = track_mask_agg.unsqueeze(2) | det_mask.unsqueeze(1)
+        logits = logits.masked_fill(combined_mask, -1e9)
+
         B, N, M = logits.shape
         assert N == M, f'Track and detection masks should match! Got {N=}, {M=}'
 

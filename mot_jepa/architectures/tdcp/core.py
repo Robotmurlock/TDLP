@@ -1,12 +1,13 @@
+import copy
+from typing import Tuple
+
 import torch
+import torch.nn.functional as F
 from torch import nn
-from torch.nn import functional as F
 
 from mot_jepa.architectures.tdcp.detection_encoder import DetectionEncoder
 from mot_jepa.architectures.tdcp.projector import TrackToDetectionProjector
 from mot_jepa.architectures.tdcp.track_encoder import TrackEncoder
-
-TEMP_INIT = 0.07
 
 
 class TrackDetectionContrastivePrediction(nn.Module):
@@ -14,33 +15,24 @@ class TrackDetectionContrastivePrediction(nn.Module):
         self,
         detection_encoder: DetectionEncoder,
         track_encoder: TrackEncoder,
-        projector: TrackToDetectionProjector,
-        temp_init: float = TEMP_INIT
+        projector: TrackToDetectionProjector
     ):
         super().__init__()
-        self._detection_encoder = detection_encoder
+        self._static_encoder = detection_encoder
+        self._motion_encoder = copy.deepcopy(detection_encoder)
         self._track_encoder = track_encoder
         self._projector = projector
 
-        self._temp = nn.Parameter(torch.tensor(temp_init))
-
-    def forward(self, track_x: torch.Tensor, track_mask: torch.Tensor, det_x: torch.Tensor, det_mask: torch.Tensor) -> torch.Tensor:
-        det_features = self._detection_encoder(det_x)
-        track_features = self._track_encoder(track_x, track_mask)
+    def forward(self, track_x: torch.Tensor, track_mask: torch.Tensor, det_x: torch.Tensor, det_mask: torch.Tensor) \
+            -> Tuple[torch.Tensor, torch.Tensor]:
+        det_features = self._static_encoder(det_x)
+        half_dim = track_x.shape[-1] // 2
+        track_static_x = self._static_encoder(track_x[..., :half_dim])
+        track_motion_x = track_static_x + self._motion_encoder(track_x[..., half_dim:])
+        track_features = self._track_encoder(track_motion_x, track_mask)
         projected_features = self._projector(track_features)
 
-        # Compute logits
-        projected_features = F.normalize(projected_features, dim=-1)
-        det_features = F.normalize(det_features, dim=-1)
-        logits = torch.matmul(projected_features, det_features.transpose(1, 2))  # (B, N1, N2)
-        logits = logits / self._temp
-
-        # Adjust masked logits
-        track_mask_agg = track_mask.all(dim=-1)  # (B, N1)
-        combined_mask = track_mask_agg.unsqueeze(2) | det_mask.unsqueeze(1)
-        logits = logits.masked_fill(combined_mask, -1e9)
-
-        return logits
+        return projected_features, det_features
 
 
 def build_track_detection_contrastive_prediction_model(
@@ -51,8 +43,7 @@ def build_track_detection_contrastive_prediction_model(
     track_encoder_n_heads: int = 8,
     track_encoder_n_layers: int = 6,
     track_encoder_ffn_dim: int = 512,
-    projector_intermediate_dim: int = 512,
-    logits_temperature_init: float = TEMP_INIT
+    projector_intermediate_dim: int = 512
 ) -> TrackDetectionContrastivePrediction:
     detection_encoder = DetectionEncoder(
         input_dim=det_input_dim,
@@ -77,8 +68,7 @@ def build_track_detection_contrastive_prediction_model(
     return TrackDetectionContrastivePrediction(
         detection_encoder=detection_encoder,
         track_encoder=track_encoder,
-        projector=projector,
-        temp_init=logits_temperature_init
+        projector=projector
     )
 
 

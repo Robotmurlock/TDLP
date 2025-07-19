@@ -88,7 +88,6 @@ def main(cfg: GlobalConfig) -> None:
         logger.warning(f'Using "{cfg.train.checkpoint_cfg.resume_from}" as starting checkpoint.')
         state_dict = torch.load(cfg.train.checkpoint_cfg.resume_from)
         model.load_state_dict(state_dict['model'])
-        model.reset_id_decoder_parameters()
 
     optimizer = cfg.train.build_optimizer(model.parameters())
     scheduler = cfg.train.build_scheduler(

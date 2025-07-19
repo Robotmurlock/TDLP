@@ -13,8 +13,10 @@ Dataset sample should be a clip from some scene with tensors:
 import logging
 import math
 import random
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Any
+import cv2
 
+import numpy as np
 import torch
 from torch.utils.data import Dataset
 
@@ -59,10 +61,7 @@ class MOTClipDataset(Dataset):
         )
 
         # Augmentation configuraion
-        self._use_augmentation = use_augmentation
-
-        self._mean = torch.tensor([-0.5, -0.5, -0.5, -0.5, 0, 0, 0, 0], dtype=torch.float32)
-        self._std = torch.tensor([1, 1, 1, 1, 0.01, 0.01, 0.01, 0.01], dtype=torch.float32)
+        self._use_augmentation = False # use_augmentation
 
         logger.info(f'Number of sampled clips: {len(self._clip_index)}.')
 
@@ -170,7 +169,7 @@ class MOTClipDataset(Dataset):
 
         return bboxes, times, temporal_mask
 
-    def __getitem__(self, index: int):
+    def get_raw(self, index: int) -> Dict[str, Any]:
         scene_name, start_index, end_index = self._clip_index[index]
 
         observed_end_index = start_index + self._clip_length
@@ -182,15 +181,6 @@ class MOTClipDataset(Dataset):
             temporal_length=self._clip_length
         )
 
-        # TODO
-        torch.set_printoptions(precision=2, sci_mode=None)
-        observed_bboxes[..., :2] = observed_bboxes[..., :2] - 0.5  # Centralize
-        observed_bboxes_fod = torch.zeros_like(observed_bboxes)
-        observed_bboxes_fod[:, 1:, :] = 10 * (observed_bboxes[:, 1:, :] - observed_bboxes[:, :-1, :])  # Scale
-        observed_bboxes_fod[:, 1:, :] = observed_bboxes_fod[:, 1:, :] * (1 - observed_temporal_mask[:, :-1].unsqueeze(-1).repeat(1, 1, observed_bboxes.shape[-1]).float())
-        observed_bboxes = torch.cat([observed_bboxes, observed_bboxes_fod], dim=-1)
-        observed_bboxes[observed_temporal_mask] = 0
-
         unobserved_bboxes, unobserved_times, unobserved_temporal_mask = self._extract_scene_clip_data(
             scene_name=scene_name,
             start_index=observed_end_index,
@@ -200,19 +190,51 @@ class MOTClipDataset(Dataset):
             remove_temporal_dim=True
         )
 
-        unobserved_bboxes[..., :2] = unobserved_bboxes[..., :2] - 0.5
+        return {
+            'observed_bboxes': observed_bboxes,
+            'observed_ts': observed_times,
+            'observed_temporal_mask': observed_temporal_mask,
+            'unobserved_bboxes': unobserved_bboxes,
+            'unobserved_ts': unobserved_times,
+            'unobserved_temporal_mask': unobserved_temporal_mask
+        }
+
+    def __getitem__(self, index: int) -> Dict[str, Any]:
+        raw = self.get_raw(index)
+        observed_bboxes = raw['observed_bboxes']
+        observed_times = raw['observed_ts']
+        observed_temporal_mask = raw['observed_temporal_mask']
+        unobserved_bboxes = raw['unobserved_bboxes']
+        unobserved_times = raw['unobserved_ts']
+        unobserved_temporal_mask = raw['unobserved_temporal_mask']
+
+        # TODO: Refactor
+        # Transform bboxes
+        observed_bboxes[..., 2:4] = observed_bboxes[..., :2] + observed_bboxes[..., 2:4]
+        # observed_bboxes[..., :2] = 3.5 * (observed_bboxes[..., :2] - 0.5)  # Centralize
+        observed_bboxes = 3.5 * (observed_bboxes - 0.5)  # Centralize
+        observed_bboxes_fod = torch.zeros_like(observed_bboxes)
+        observed_bboxes_fod[:, 1:, :] = 30 * (observed_bboxes[:, 1:, :] - observed_bboxes[:, :-1, :])  # Scale
+        observed_bboxes_fod[:, 1:, :] = observed_bboxes_fod[:, 1:, :] * (1 - observed_temporal_mask[:, :-1].unsqueeze(-1).repeat(1, 1, observed_bboxes.shape[-1]).float())
+        observed_bboxes = torch.cat([observed_bboxes, observed_bboxes_fod], dim=-1)
+        observed_bboxes[observed_temporal_mask] = 0
+
+        unobserved_bboxes[..., 2:4] = unobserved_bboxes[..., :2] + unobserved_bboxes[..., 2:4]
+        # unobserved_bboxes[..., :2] = 3.5 * (unobserved_bboxes[..., :2] - 0.5)
+        unobserved_bboxes = 3.5 * (unobserved_bboxes - 0.5)  # Centralize
         unobserved_bboxes[unobserved_temporal_mask] = 0
 
-        observed_bboxes, observed_times, observed_temporal_mask, \
-            unobserved_bboxes, unobserved_times, unobserved_temporal_mask = \
-                self._augment_trajectories(
-                    observed_bboxes=observed_bboxes,
-                    observed_times=observed_times,
-                    observed_temporal_mask=observed_temporal_mask,
-                    unobserved_bboxes=unobserved_bboxes,
-                    unobserved_times=unobserved_times,
-                    unobserved_temporal_mask=unobserved_temporal_mask
-                )
+        if self._use_augmentation:
+            observed_bboxes, observed_times, observed_temporal_mask, \
+                unobserved_bboxes, unobserved_times, unobserved_temporal_mask = \
+                    self._augment_trajectories(
+                        observed_bboxes=observed_bboxes,
+                        observed_times=observed_times,
+                        observed_temporal_mask=observed_temporal_mask,
+                        unobserved_bboxes=unobserved_bboxes,
+                        unobserved_times=unobserved_times,
+                        unobserved_temporal_mask=unobserved_temporal_mask
+                    )
 
         return {
             'observed_bboxes': observed_bboxes,
@@ -220,8 +242,54 @@ class MOTClipDataset(Dataset):
             'observed_temporal_mask': observed_temporal_mask,
             'unobserved_bboxes': unobserved_bboxes,
             'unobserved_ts': unobserved_times,
-            'unobserved_temporal_mask': unobserved_temporal_mask,
+            'unobserved_temporal_mask': unobserved_temporal_mask
         }
+
+    def visualize_scene(self, index: int) -> np.ndarray:
+        scene_name, start_index, end_index = self._clip_index[index]
+        scene_image_path = self._index.get_scene_image_path(scene_name, end_index)
+        raw = self.get_raw(index)
+
+        # noinspection PyUnresolvedReferences
+        image = cv2.imread(scene_image_path)
+        h, w, _ = image.shape
+        assert image is not None, f'Failed to load image "{scene_image_path}".'
+
+        # Visualize detections
+        unobserved_bboxes = raw['unobserved_bboxes']
+        unobserved_temporal_mask = raw['unobserved_temporal_mask']
+        for obj_index in range(unobserved_bboxes.shape[0]):
+            if bool(unobserved_temporal_mask[obj_index].bool().item()):
+                continue
+
+            bbox = unobserved_bboxes[obj_index].numpy().tolist()
+
+            bbox = [
+                round(bbox[0] * w),
+                round(bbox[1] * h),
+                round((bbox[0] + bbox[2]) * w),
+                round((bbox[1] + bbox[3]) * h)
+            ]
+            # noinspection PyUnresolvedReferences
+            image = cv2.rectangle(image, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 0, 255), 2)
+
+        # Visualize track history
+        observed_bboxes = raw['observed_bboxes']
+        observed_temporal_mask = raw['observed_temporal_mask']
+        for obj_index in range(observed_bboxes.shape[0]):
+            points = []
+            for temporal_index in range(observed_bboxes.shape[1]):
+                if bool(observed_temporal_mask[obj_index, temporal_index].bool().item()):
+                    continue
+
+                bbox = observed_bboxes[obj_index, temporal_index].numpy().tolist()
+                center_point = [round((bbox[0] + bbox[2] / 2) * w), round((bbox[1] + bbox[3] / 2) * h)]
+                points.append(center_point)
+
+            points = np.array([points], dtype=np.int32)
+            image = cv2.polylines(image, points, False, (0, 0, 255), 3)
+
+        return image
 
     def _augment_trajectories(
         self,
@@ -242,7 +310,7 @@ class MOTClipDataset(Dataset):
                 observed_begin = random.randint(0, self._clip_length)
                 observed_max_interval = self._clip_length - observed_begin
                 observed_end = observed_begin + math.ceil(observed_max_interval * random.random())
-                observed_remove_masks[n, observed_begin: observed_end] = True
+                observed_remove_masks[n, observed_begin:observed_end] = True
         observed_temporal_mask = observed_temporal_mask | observed_remove_masks
 
         # Trajectory switch

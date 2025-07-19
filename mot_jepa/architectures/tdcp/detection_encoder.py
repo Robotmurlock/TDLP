@@ -10,11 +10,16 @@ class DetectionEncoder(nn.Module):
         dropout: float = 0.1,
     ):
         super().__init__()
-        self.linear = nn.Linear(input_dim, hidden_dim)
-        self.dropout = nn.Dropout(dropout)
+        self.encoder = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.SiLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, hidden_dim),
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.dropout(self.linear(x))
+        return self.encoder(x)
 
 
 def run_test() -> None:
