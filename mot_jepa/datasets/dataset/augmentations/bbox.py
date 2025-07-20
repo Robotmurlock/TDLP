@@ -37,7 +37,7 @@ class BBoxGaussianNoiseAugmentation(NonDeterministicAugmentation):
         return x + x_noise
 
     def _apply(self, data: VideoClipData) -> VideoClipData:
-        data.observed_bboxes = self._add_noise(data.observed_ts)
+        data.observed_bboxes = self._add_noise(data.observed_bboxes)
         if self._unobs_noise:
             data.unobserved_bboxes = self._add_noise(data.unobserved_bboxes)
 

@@ -141,18 +141,6 @@ class MOTClipDataset(Dataset):
     def __len__(self) -> int:
         return len(self._clip_index)
 
-    def _bbox_augmentation(self, bbox: torch.Tensor) -> torch.Tensor:
-        # TODO: Generalize and make configurable
-        # noinspection PyPep8Naming
-        SIGMA = 0.05
-        bbox_noise = SIGMA * torch.randn_like(bbox)
-        w, h = bbox[..., 2], bbox[..., 3]
-        bbox_noise[..., [0, 2]] *= w
-        bbox_noise[..., [1, 3]] *= h
-        bbox = bbox + bbox_noise
-        bbox = torch.clamp(bbox, min=0.0, max=1.0)
-        return bbox
-
     @staticmethod
     def bbox_to_tensor(bbox: List[float], score: float) -> torch.Tensor:
         """
@@ -265,8 +253,8 @@ class MOTClipDataset(Dataset):
 
     def __getitem__(self, index: int) -> Dict[str, Any]:
         data = self.get_raw(index)
-        data = self._transform(data)
         data = self._augmentations(data)
+        data = self._transform(data)
         return data.serialize()
 
     def visualize_scene(self, index: int) -> np.ndarray:
