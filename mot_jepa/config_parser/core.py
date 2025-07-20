@@ -77,11 +77,6 @@ class DatasetConfig:
 
 
 @dataclass
-class ModelConfig:
-    params: dict
-
-
-@dataclass
 class ResourcesConfig:
     batch_size: int
     accelerator: str
@@ -139,6 +134,7 @@ class EvalConfig:
     object_detection: EvalObjectDetectionConfig
     split: str = 'val'
     checkpoint: Optional[str] = None
+    visualize: bool = False
 
 
 @dataclass
@@ -168,7 +164,7 @@ class GlobalConfig:
     resources: ResourcesConfig
     dataset: DatasetConfig
     train: TrainConfig
-    model: ModelConfig
+    model_config: dict
 
     # noinspection PyUnresolvedReferences
     path: PathConfig = field(default_factory=PathConfig.default)
@@ -178,6 +174,12 @@ class GlobalConfig:
         if self.eval.checkpoint is None:
             experiment_path = conventions.get_experiment_path(self.path.master, self.dataset_name, self.experiment_name)
             self.eval.checkpoint = conventions.get_latest_checkpoint_path(experiment_path)
+
+    def build_model(self):
+        return instantiate(
+            OmegaConf.create(self.model_config),
+        )
+
 
 # Configuring hydra config store
 # If config has `- global_config` in defaults then

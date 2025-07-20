@@ -8,6 +8,7 @@ import torch
 from motrack.evaluation.io import TrackerInferenceWriter
 from motrack.library.cv import PredBBox
 from motrack.object_detection import DetectionManager
+from motrack.tools.visualize import run_visualize_tracker_inference
 from motrack.tracker import Tracker
 from motrack.tracker.matching.utils import hungarian
 from motrack.tracker.tracklet import Tracklet
@@ -17,7 +18,6 @@ from torch import nn
 from torch.nn import functional as F
 from tqdm import tqdm
 
-from mot_jepa.architectures.tdcp import build_track_detection_contrastive_prediction_model
 from mot_jepa.common.project import CONFIGS_PATH
 from mot_jepa.config_parser import GlobalConfig
 from mot_jepa.datasets.dataset import dataset_index_factory
@@ -25,8 +25,6 @@ from mot_jepa.datasets.dataset.mot import VideoClipData, MOTClipDataset
 from mot_jepa.datasets.dataset.motrack import MotrackDatasetWrapper
 from mot_jepa.datasets.dataset.transform import Transform
 from mot_jepa.utils import pipeline
-from motrack.tools.visualize import run_visualize_tracker_inference
-
 
 K = 0
 
@@ -192,9 +190,7 @@ def main(cfg: GlobalConfig) -> None:
         sequence_list=cfg.dataset.index.sequence_list
     )
 
-    model = build_track_detection_contrastive_prediction_model(
-        **cfg.model.params
-    )
+    model = cfg.build_model()
     state_dict = torch.load(cfg.eval.checkpoint)
     model.load_state_dict(state_dict['model'])
 
@@ -247,11 +243,12 @@ def main(cfg: GlobalConfig) -> None:
                 for tracklet in tracklets:
                     tracker_all_inf_writer.write(frame_index, tracklet)
 
-    run_visualize_tracker_inference(
-        dataset=motrack_dataset_wrapper,
-        tracker_active_output=tracker_active_output,
-        tracker_output_option=tracker_all_output
-    )
+    if cfg.eval.visualize:
+        run_visualize_tracker_inference(
+            dataset=motrack_dataset_wrapper,
+            tracker_active_output=tracker_active_output,
+            tracker_output_option=tracker_all_output
+        )
 
 
 if __name__ == '__main__':

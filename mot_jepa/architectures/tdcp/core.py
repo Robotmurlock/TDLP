@@ -2,7 +2,6 @@ import copy
 from typing import Tuple
 
 import torch
-import torch.nn.functional as F
 from torch import nn
 
 from mot_jepa.architectures.tdcp.detection_encoder import DetectionEncoder

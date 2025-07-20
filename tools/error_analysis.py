@@ -52,10 +52,8 @@ def bbox_iou_matrix_xywh(bboxes: torch.Tensor) -> torch.Tensor:
 @hydra.main(config_path=CONFIGS_PATH, config_name='default', version_base='1.1')
 @pipeline.task('train')
 def main(cfg: GlobalConfig) -> None:
-    torch.set_printoptions(precision=3, sci_mode=None)
+    torch.set_printoptions(precision=2, sci_mode=None)
 
-    device = 'cuda:0'
-    checkpoint_path = f'/media/home/MOT-CLIP-outputs/experiments/DanceTrack/{cfg.experiment_name}/checkpoints/last.pt'
     index = 1200
 
     val_index = dataset_index_factory(
@@ -66,17 +64,15 @@ def main(cfg: GlobalConfig) -> None:
     )
 
     val_dataset = cfg.dataset.build_dataset(val_index)
-    model = build_track_detection_contrastive_prediction_model(
-        **cfg.model.params
-    )
-    state_dict = torch.load(checkpoint_path)
+    model = cfg.build_model()
+    state_dict = torch.load(cfg.eval.checkpoint)
     model.load_state_dict(state_dict['model'])
-    model.to(device)
+    model.to(cfg.resources.accelerator)
     model.eval()
 
     scene_image = val_dataset.visualize_scene(index)
     data = val_dataset[index]
-    data = {k: v.unsqueeze(0).to(device) for k, v in data.items()}
+    data = {k: v.unsqueeze(0).to(cfg.resources.accelerator) for k, v in data.items()}
     K = 8
     track_features, det_features = model(
         data['observed_bboxes'],

@@ -1,9 +1,9 @@
-params:
-  det_input_dim: 5
-  track_input_dim: 10
-  hidden_dim: 256
-  dropout: 0.1
-  track_encoder_n_heads: 8
-  track_encoder_n_layers: 6
-  track_encoder_ffn_dim: 512
-  projector_intermediate_dim: 512
+_target_: mot_jepa.architectures.tdcp.core.build_track_detection_contrastive_prediction_model
+det_input_dim: 5
+track_input_dim: 10
+hidden_dim: 256
+dropout: 0.1
+track_encoder_n_heads: 8
+track_encoder_n_layers: 6
+track_encoder_ffn_dim: 512
+projector_intermediate_dim: 512

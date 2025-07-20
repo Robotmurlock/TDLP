@@ -4,8 +4,8 @@ defaults:
   - dataset: dancetrack.yaml
   - train: default.yaml
   - eval: default.yaml
-  - model: default.yaml
+  - model_config: default.yaml
   - path: default.yaml
 
-experiment_name: exp01-Baseline-BatchLevelInfoNCE
+experiment_name: exp02-fromExp01-DefaultAugmentations
 dataset_name: DanceTrack

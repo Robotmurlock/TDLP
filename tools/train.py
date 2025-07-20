@@ -4,7 +4,6 @@ import hydra
 import torch
 from torch.utils.data import DataLoader, DistributedSampler
 
-from mot_jepa.architectures.tdcp import build_track_detection_contrastive_prediction_model
 from mot_jepa.common import conventions
 from mot_jepa.common.project import CONFIGS_PATH
 from mot_jepa.config_parser import GlobalConfig
@@ -81,9 +80,7 @@ def main(cfg: GlobalConfig) -> None:
         shuffle=False
     )
 
-    model = build_track_detection_contrastive_prediction_model(
-        **cfg.model.params
-    )
+    model = cfg.build_model()
     if cfg.train.checkpoint_cfg.resume_from is not None:
         logger.warning(f'Using "{cfg.train.checkpoint_cfg.resume_from}" as starting checkpoint.')
         state_dict = torch.load(cfg.train.checkpoint_cfg.resume_from)
