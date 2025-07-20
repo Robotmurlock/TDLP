@@ -1,1 +1,4 @@
-split: 'test'
+defaults:
+  - object_detection: yolox.yaml
+
+split: 'val'

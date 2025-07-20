@@ -1,5 +1,5 @@
 defaults:
-  - global_config
+  - the_global_config
   - resources: default.yaml
   - dataset: dancetrack.yaml
   - train: default.yaml

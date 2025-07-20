@@ -18,8 +18,8 @@ from torch.optim.optimizer import Optimizer
 
 from mot_jepa.common import project, conventions
 from mot_jepa.datasets.dataset import DatasetIndex, MOTClipDataset
-from mot_jepa.datasets.dataset.augmentations import IdentityAugmentation
-from mot_jepa.datasets.dataset.transform import IdentityTransform
+from mot_jepa.datasets.dataset.augmentations import Augmentation, IdentityAugmentation
+from mot_jepa.datasets.dataset.transform import Transform, IdentityTransform
 
 logger = logging.getLogger('ConfigParser')
 
@@ -50,6 +50,12 @@ class DatasetConfig:
         if self.val_clip_sampling_step is None:
             self.val_clip_sampling_step = self.clip_sampling_step
 
+    def build_transform(self, disable_transform: bool = False) -> Transform:
+        return IdentityTransform() if disable_transform or self.transform is None else instantiate(self.transform)
+
+    def build_augmentations(self, disable_augmentations: bool = False) -> Augmentation:
+        return IdentityAugmentation() if disable_augmentations or self.augmentations is None else instantiate(self.augmentations)
+
     def build_dataset(
         self,
         index: DatasetIndex,
@@ -58,17 +64,15 @@ class DatasetConfig:
     ) -> MOTClipDataset:
         test = index.split in ['val', 'test']
         clip_sampling_step = self.val_clip_sampling_step if test else self.clip_sampling_step
-
-        transform = IdentityTransform() if disable_transform or self.transform is None else instantiate(self.transform)
-        augmentations = IdentityAugmentation() if disable_augmentations or self.augmentations is None or test else instantiate(self.augmentations)
+        disable_augmentations = disable_augmentations or test
 
         return MOTClipDataset(
             index=index,
             n_tracks=self.n_tracks,
             clip_length=self.clip_length,
             clip_sampling_step=clip_sampling_step,
-            transform=transform,
-            augmentations=augmentations
+            transform=self.build_transform(disable_transform=disable_transform),
+            augmentations=self.build_augmentations(disable_augmentations=disable_augmentations)
         )
 
 
@@ -122,9 +126,18 @@ class TrainConfig:
 
 
 @dataclass
+class EvalObjectDetectionConfig:
+    type: str
+    params: dict
+    lookup_path: Optional[str] = None
+    cache_path: Optional[str] = None
+    oracle: bool = False
+
+
+@dataclass
 class EvalConfig:
-    split: str
-    batch_size: Optional[int] = None
+    object_detection: EvalObjectDetectionConfig
+    split: str = 'val'
     checkpoint: Optional[str] = None
 
 
@@ -155,23 +168,19 @@ class GlobalConfig:
     resources: ResourcesConfig
     dataset: DatasetConfig
     train: TrainConfig
-    eval: EvalConfig
     model: ModelConfig
 
     # noinspection PyUnresolvedReferences
     path: PathConfig = field(default_factory=PathConfig.default)
+    eval: Optional[EvalConfig] = None
 
     def __post_init__(self):
         if self.eval.checkpoint is None:
             experiment_path = conventions.get_experiment_path(self.path.master, self.dataset_name, self.experiment_name)
             self.eval.checkpoint = conventions.get_latest_checkpoint_path(experiment_path)
 
-        if self.eval.batch_size is None:
-            # No override
-            self.eval.batch_size = self.resources.batch_size
-
 # Configuring hydra config store
 # If config has `- global_config` in defaults then
 # full config is recursively instantiated
 cs = ConfigStore.instance()
-cs.store(name='global_config', node=GlobalConfig)
+cs.store(name='the_global_config', node=GlobalConfig)

@@ -380,6 +380,7 @@ dependencies = [
     { name = "einops" },
     { name = "hydra-core" },
     { name = "matplotlib" },
+    { name = "motrack" },
     { name = "numpy" },
     { name = "omegaconf" },
     { name = "opencv-python" },
@@ -404,6 +405,7 @@ requires-dist = [
     { name = "einops", specifier = ">=0.8.1" },
     { name = "hydra-core", specifier = ">=1.3.2" },
     { name = "matplotlib", specifier = ">=3.10.3" },
+    { name = "motrack", specifier = ">=0.4.1" },
     { name = "numpy", specifier = ">=2.3.1" },
     { name = "omegaconf", specifier = ">=2.3.0" },
     { name = "opencv-python", specifier = ">=4.11.0.86" },
@@ -420,6 +422,41 @@ requires-dist = [
     { name = "torchmetrics", specifier = "==0.11.4" },
     { name = "torchvision", specifier = ">=0.22.1" },
     { name = "tqdm", specifier = ">=4.67.1" },
+]
+
+[[package]]
+name = "motrack"
+version = "0.4.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "hydra-core" },
+    { name = "matplotlib" },
+    { name = "motrack-motion" },
+    { name = "numpy" },
+    { name = "omegaconf" },
+    { name = "opencv-python" },
+    { name = "pandas" },
+    { name = "pyyaml" },
+    { name = "scipy" },
+    { name = "torch" },
+    { name = "tqdm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3a/8f/33e16ee20a0aaa7755a7bac45a742fed1aa3aebe9d189a3f2957aa300acc/motrack-0.4.1.tar.gz", hash = "sha256:08aec9c2a146c9b7de9cc275126ddfcaf382e6f63bfef94c1330928535ed1525", size = 70374, upload-time = "2024-02-26T17:56:22.037Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/15/fb/bc4fc31c2b82115af66152c6c0689eb0cd64faff7fa32101f09934183a2f/motrack-0.4.1-py3-none-any.whl", hash = "sha256:623b770ee06d2e2fb200ce18e1d27fd324c734f36597df1c3317dcb4e0a51ec2", size = 104227, upload-time = "2024-02-26T17:56:16.009Z" },
+]
+
+[[package]]
+name = "motrack-motion"
+version = "0.2.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "torch" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1c/29/70a9fb37b6f5c340cb6e034d00c913f4ec14c100b4a16b81f3c87490bf48/motrack-motion-0.2.4.tar.gz", hash = "sha256:3181d0f037a83001d4439886df11b419812241dc1458f15f966ddf93e10c7d12", size = 51944, upload-time = "2024-01-21T13:10:08.197Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7d/3f/e99c49e4aa86e8feaaba4fb4ee412711231fa96c8521675af4d1e78df685/motrack_motion-0.2.4-py3-none-any.whl", hash = "sha256:2386e1fc8af3196515e89c43d672863b44f1564f6235c0360585621564b13ea3", size = 72233, upload-time = "2024-01-21T13:10:04.542Z" },
 ]
 
 [[package]]
