@@ -20,7 +20,6 @@ from torch.utils.tensorboard import SummaryWriter
 from mot_jepa.common.conventions import LAST_CKPT
 from mot_jepa.trainer import torch_distrib_utils
 from mot_jepa.trainer import torch_helper
-# from mot_jepa.trainer.loss import SymmetricContrastiveLossFunction
 from mot_jepa.trainer.losses.base import VideoClipLoss
 from mot_jepa.trainer.metrics import LossDictMeter, AccuracyMeter
 

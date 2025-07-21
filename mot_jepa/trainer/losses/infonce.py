@@ -8,10 +8,8 @@ from mot_jepa.trainer.losses.base import VideoClipLoss
 
 
 class ClipLevelInfoNCE(VideoClipLoss):
-    def __init__(self, mse: bool = True, mse_weight: float = 1.0):
+    def __init__(self):
         super().__init__()
-        self._mse = mse
-        self._mse_weight = mse_weight
         self._loss_func = losses.NTXentLoss(distance=distances.CosineSimilarity(), reducer=reducers.AvgNonZeroReducer())
 
     def forward(
@@ -56,10 +54,6 @@ class ClipLevelInfoNCE(VideoClipLoss):
 
             # Calculate losses
             sub_loss = self._loss_func(sub_embeddings, sub_labels)
-
-            if self._mse:
-                intersect_mask = (~agg_track_mask) & (~detection_mask)
-                sub_loss = sub_loss + F.mse_loss(track_x[intersect_mask], det_x[intersect_mask])
             losses.append(sub_loss)
 
             distances = torch.cdist(sub_embeddings[:sub_track_x.shape[0]], sub_embeddings[-sub_det_x.shape[0]:], p=2)
@@ -90,10 +84,8 @@ class ClipLevelInfoNCE(VideoClipLoss):
 
 
 class BatchLevelInfoNCE(VideoClipLoss):
-    def __init__(self, mse: bool = True, mse_weight: float = 1.0):
+    def __init__(self):
         super().__init__()
-        self._mse = mse
-        self._mse_weight = mse_weight
         self._loss_func = losses.NTXentLoss(distance=distances.CosineSimilarity(), reducer=reducers.AvgNonZeroReducer())
 
     def forward(self, track_x, det_x, track_mask, detection_mask):
@@ -121,12 +113,8 @@ class BatchLevelInfoNCE(VideoClipLoss):
         labels = torch.cat([global_track_labels, global_det_labels], dim=0)
         filtered_track_x = flatten_track_x[~flatten_agg_track_mask]
         filtered_det_x = flatten_det_x[~flatten_detection_mask]
-        embeddings = torch.cat([filtered_track_x.detach(), filtered_det_x], dim=0)
+        embeddings = torch.cat([filtered_track_x, filtered_det_x], dim=0)
         loss = self._loss_func(embeddings, labels)
-
-        if self._mse:
-            flatten_intersect_mask = (~flatten_agg_track_mask) & (~flatten_detection_mask)
-            loss = loss + F.mse_loss(flatten_track_x[flatten_intersect_mask], flatten_det_x[flatten_intersect_mask])
 
         # Labels and predictions are still calculated at clip level
         filtered_track_labels_list = []

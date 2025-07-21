@@ -1,0 +1,11 @@
+defaults:
+  - the_global_config
+  - resources: default.yaml
+  - dataset: dancetrack_basic.yaml
+  - train: default.yaml
+  - eval: default.yaml
+  - model_config: basic.yaml
+  - path: default.yaml
+
+experiment_name: exp04-fromExp03-NoDetachTracksInLossCompute-NoMSe
+dataset_name: DanceTrack

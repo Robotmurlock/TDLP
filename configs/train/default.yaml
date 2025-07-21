@@ -3,8 +3,6 @@ gradient_clip: null
 
 loss_config:
   _target_: mot_jepa.trainer.losses.infonce.BatchLevelInfoNCE
-  mse: true
-  mse_weight: 1.0
 
 optimizer_config:
   _target_: torch.optim.Adam

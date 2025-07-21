@@ -86,6 +86,8 @@ class MyTracker(Tracker):
         track_features = F.normalize(track_features, dim=-1)
         det_features = F.normalize(det_features, dim=-1)
         cost_matrix = (track_features[:n_tracks] @ det_features[:n_detections].T).numpy()
+        cost_matrix = 1 - (cost_matrix + 1) / 2 # [-1, 1] -> [0, 1]
+        cost_matrix[cost_matrix > self._sim_threshold] = np.inf
 
         matches, unmatched_tracklets, unmatched_detections = hungarian(cost_matrix)
 
@@ -179,7 +181,7 @@ class MyTracker(Tracker):
 
 @torch.no_grad()
 @hydra.main(config_path=CONFIGS_PATH, config_name='default', version_base='1.1')
-@pipeline.task('train')
+@pipeline.task('inference')
 def main(cfg: GlobalConfig) -> None:
     torch.set_printoptions(precision=3, sci_mode=None)
 

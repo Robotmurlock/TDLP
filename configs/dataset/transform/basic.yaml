@@ -1,0 +1,4 @@
+_target_: mot_jepa.datasets.dataset.transform.bbox.BBoxStandardization
+xywh_to_xyxy: true
+coord_mean: [0.5, 0.5, 0.5, 0.5, 0.5]
+coord_std: [0.2, 0.1, 0.2, 0.1, 1.0]

@@ -3,7 +3,6 @@ import hydra
 import torch
 import torch.nn.functional as F
 
-from mot_jepa.architectures.tdcp import build_track_detection_contrastive_prediction_model
 from mot_jepa.common.project import CONFIGS_PATH
 from mot_jepa.config_parser import GlobalConfig
 from mot_jepa.datasets.dataset import dataset_index_factory
@@ -50,7 +49,7 @@ def bbox_iou_matrix_xywh(bboxes: torch.Tensor) -> torch.Tensor:
 
 @torch.no_grad()
 @hydra.main(config_path=CONFIGS_PATH, config_name='default', version_base='1.1')
-@pipeline.task('train')
+@pipeline.task('error_analysis')
 def main(cfg: GlobalConfig) -> None:
     torch.set_printoptions(precision=2, sci_mode=None)
 
