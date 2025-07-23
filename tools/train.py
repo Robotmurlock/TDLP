@@ -93,10 +93,10 @@ def main(cfg: GlobalConfig) -> None:
         epoch_steps=len(train_dataloader),
     )
 
-    experiments_path = conventions.get_experiment_path(cfg.path.master, cfg.dataset_name, cfg.experiment_name)
+    experiment_path = conventions.get_experiment_path(cfg.path.master, cfg.dataset_name, cfg.experiment_name)
     tensorboard_log_dirpath = \
         conventions.get_tensorboard_logs_dirpath(cfg.path.master, cfg.dataset_name, cfg.experiment_name)
-    checkpoints_dirpath = conventions.get_checkpoints_dirpath(experiments_path)
+    checkpoints_dirpath = conventions.get_checkpoints_dirpath(experiment_path)
     trainer = ContrastiveTrainer(
         model=model,
         loss_func=loss_func,

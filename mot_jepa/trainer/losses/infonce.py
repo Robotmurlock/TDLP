@@ -125,22 +125,28 @@ class BatchLevelInfoNCE(VideoClipLoss):
             track_labels = torch.arange(N).to(track_x).unsqueeze(0).repeat(B, 1).long()
             det_labels = torch.arange(N).to(det_x).unsqueeze(0).repeat(B, 1).long()
             for b_i in range(B):
-                sub_track_labels = track_labels[b_i][~agg_track_mask[b_i]]
-                sub_det_labels = det_labels[b_i][~detection_mask[b_i]]
+                combined_mask = ~agg_track_mask[b_i] & ~detection_mask[b_i]
+                if not bool(combined_mask.any().item()):
+                    continue
 
-                sub_track_x = track_x[b_i][~agg_track_mask[b_i]]
-                sub_det_x = det_x[b_i][~detection_mask[b_i]]
+                sub_track_labels = track_labels[b_i][combined_mask]
+                sub_det_labels = det_labels[b_i][combined_mask]
+                sub_track_x = track_x[b_i][combined_mask]
+                sub_det_x = det_x[b_i][combined_mask]
                 sub_track_x = F.normalize(sub_track_x, dim=-1)
                 sub_det_x = F.normalize(sub_det_x, dim=-1)
 
-                distances = torch.cdist(sub_track_x, sub_det_x, p=2)
-                sub_track_predictions = torch.argmin(distances, dim=1)
-                sub_det_predictions = torch.argmin(distances, dim=0)
+                n_sub_tracks = sub_track_x.shape[0]
+                n_sub_det = sub_det_x.shape[0]
+                if n_sub_tracks > 0 and n_sub_det > 0:
+                    distances = torch.cdist(sub_track_x, sub_det_x, p=2)
+                    sub_track_predictions = torch.argmin(distances, dim=1)
+                    sub_det_predictions = torch.argmin(distances, dim=0)
 
-                filtered_track_labels_list.append(sub_track_labels)
-                filtered_det_labels_list.append(sub_det_labels)
-                track_predictions_list.append(sub_track_predictions)
-                det_predictions_list.append(sub_det_predictions)
+                    filtered_track_labels_list.append(sub_track_labels)
+                    filtered_det_labels_list.append(sub_det_labels)
+                    track_predictions_list.append(sub_track_predictions)
+                    det_predictions_list.append(sub_det_predictions)
 
         filtered_track_labels = torch.cat(filtered_track_labels_list)
         filtered_det_labels_list = torch.cat(filtered_det_labels_list)

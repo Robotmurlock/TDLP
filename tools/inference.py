@@ -18,6 +18,7 @@ from torch import nn
 from torch.nn import functional as F
 from tqdm import tqdm
 
+from mot_jepa.common import conventions
 from mot_jepa.common.project import CONFIGS_PATH
 from mot_jepa.config_parser import GlobalConfig
 from mot_jepa.datasets.dataset import dataset_index_factory
@@ -25,8 +26,6 @@ from mot_jepa.datasets.dataset.mot import VideoClipData, MOTClipDataset
 from mot_jepa.datasets.dataset.motrack import MotrackDatasetWrapper
 from mot_jepa.datasets.dataset.transform import Transform
 from mot_jepa.utils import pipeline
-
-K = 0
 
 
 class MyTracker(Tracker):
@@ -105,10 +104,10 @@ class MyTracker(Tracker):
         for t_i in unmatched_tracklets:
             tracklet = tracklets[t_i]
 
-
-            if tracklet.lost_time > self._remember_threshold \
-                    or tracklet.state == TrackletState.NEW:
+            if tracklet.lost_time > self._remember_threshold or tracklet.state == TrackletState.NEW:
                 tracklet.state = TrackletState.DELETED
+            else:
+                tracklet.state = TrackletState.LOST
 
         # Handle unmatched detections
         new_tracklets: List[Tracklet] = []
@@ -211,8 +210,15 @@ def main(cfg: GlobalConfig) -> None:
         lookup=lookup
     )
 
-    tracker_active_output = '/work/tracker_inference/active'
-    tracker_all_output = '/work/tracker_inference/all'
+    experiment_path = conventions.get_experiment_path(cfg.path.master, cfg.dataset_name, cfg.experiment_name)
+    tracker_active_output = conventions.get_inference_path(
+        experiment_path=experiment_path,
+        inference_type=conventions.InferenceType.ACTIVE
+    )
+    tracker_all_output = conventions.get_inference_path(
+        experiment_path=experiment_path,
+        inference_type=conventions.InferenceType.ALL
+    )
 
     scene_names = dataset_index.scenes
     for scene_name in tqdm(scene_names):

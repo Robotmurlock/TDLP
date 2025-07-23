@@ -7,5 +7,5 @@ defaults:
   - model_config: default.yaml
   - path: default.yaml
 
-experiment_name: exp02-fromExp01-DefaultAugmentations
+experiment_name: exp04-fromExp01-MaxTracks40
 dataset_name: DanceTrack

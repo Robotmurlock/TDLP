@@ -60,7 +60,7 @@ class MOTClipDataset(Dataset):
         max_tracks = index.get_max_tracks()
         logger.info(f'Maximum number of tracks over all scenes: {max_tracks}.')
 
-        if n_tracks <= max_tracks:
+        if n_tracks < max_tracks:
             logger.warning(f'Number of tracks ({n_tracks}) is lower than maximum '
                            f'number of tracks ({max_tracks}) in a scene.')
         self._n_tracks = n_tracks

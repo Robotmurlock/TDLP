@@ -1,8 +1,8 @@
 import math
 import random
+from typing import Tuple
 
 import torch
-from typing import Tuple
 
 from mot_jepa.datasets.dataset.augmentations.base import Augmentation
 from mot_jepa.datasets.dataset.common.data import VideoClipData
@@ -12,9 +12,10 @@ class OcclusionAugmentations(Augmentation):
     """
     Remove parts of observed track (simulate occlusions)
     """
-    def __init__(self, drop_ratio: float):
+    def __init__(self, drop_ratio: float, occlude_unobs: bool = False):
         super().__init__()
         self._drop_ratio = drop_ratio
+        self._occlude_unobs = occlude_unobs
 
     def apply(self, data: VideoClipData) -> VideoClipData:
         n_tracks, clip_length = data.observed_temporal_mask.shape
@@ -28,6 +29,12 @@ class OcclusionAugmentations(Augmentation):
                 observed_end = observed_begin + math.ceil(observed_max_interval * random.random())
                 observed_remove_masks[n, observed_begin:observed_end] = True
         data.observed_temporal_mask = data.observed_temporal_mask | observed_remove_masks
+
+        if self._occlude_unobs:
+            n_detections = data.unobserved_temporal_mask.shape[0]
+            for n in range(n_detections):
+                if random.random() < self._drop_ratio / clip_length:
+                    data.unobserved_temporal_mask[n] = True
 
         return data
 
@@ -70,7 +77,7 @@ class IdentitySwitchAugmentation(Augmentation):
 
 
 class SmartIdentitySwitchAugmentation(Augmentation):
-    def __init__(self, switch_ratio: float, iou_threshold: float = 0.1):
+    def __init__(self, switch_ratio: float, iou_threshold: float = 0.1, max_switch_ratio: float = 1.0):
         """
         Partially switch track identities, simulating realistic identity switches.
 
@@ -81,19 +88,22 @@ class SmartIdentitySwitchAugmentation(Augmentation):
         super().__init__()
         self._switch_ratio = switch_ratio
         self._iou_threshold = iou_threshold
+        self._max_switch_ratio = max_switch_ratio
 
     def apply(self, data: VideoClipData) -> VideoClipData:
-        n_tracks, clip_length = data.observed_temporal_mask.shape
+        n_tracks, _ = data.observed_temporal_mask.shape
 
         candidate_matrix, candidate_pair_matrix = self._compute_switch_candidates(data)
 
         switch_pairs = torch.nonzero(candidate_pair_matrix)
         switch_pairs = switch_pairs[torch.randperm(len(switch_pairs))]
-
-        num_switches = min(max(1, int(len(switch_pairs) * self._switch_ratio)), n_tracks - 1)
-        switch_pairs = switch_pairs[:num_switches]
+        max_switches = int(self._max_switch_ratio * n_tracks)
+        switch_pairs = switch_pairs[:max_switches]
 
         for idx_a, idx_b in switch_pairs:
+            if random.random() > self._switch_ratio:
+                continue
+
             switchable_timesteps = self._get_switchable_timesteps(
                 data.observed_temporal_mask, idx_a, idx_b, candidate_matrix[idx_a, idx_b]
             )
@@ -139,8 +149,8 @@ class SmartIdentitySwitchAugmentation(Augmentation):
 
     @staticmethod
     def _calculate_iou(box_a, box_b):
-        xa1, ya1, wa, ha = box_a
-        xb1, yb1, wb, hb = box_b
+        xa1, ya1, wa, ha, _ = box_a
+        xb1, yb1, wb, hb, _ = box_b
 
         xa2, ya2 = xa1 + wa, ya1 + ha
         xb2, yb2 = xb1 + wb, yb1 + hb
@@ -162,14 +172,21 @@ class SmartIdentitySwitchAugmentation(Augmentation):
 
     @staticmethod
     def _get_switchable_timesteps(mask, idx_a, idx_b, candidate_vector):
-        combined_mask = mask[idx_a] | mask[idx_b]
-        valid_timesteps = torch.nonzero(candidate_vector & ~combined_mask).flatten()
+        combined_mask = ~mask[idx_a] & ~mask[idx_b]
+        valid_timesteps = torch.nonzero(candidate_vector & combined_mask).flatten()
         return valid_timesteps.tolist()
 
     @staticmethod
-    def _switch(data, idx_a, idx_b, time):
-        data.observed_bboxes[[idx_a, idx_b], time:] = data.observed_bboxes[[idx_b, idx_a], time:]
-        data.observed_temporal_mask[[idx_a, idx_b], time:] = data.observed_temporal_mask[[idx_b, idx_a], time:]
+    def _switch(data, idx_a, idx_b, start_time):
+        _, clip_length = data.observed_temporal_mask.shape
+        switch_max_len = clip_length - start_time - 1
+        assert switch_max_len >= 0
+        if switch_max_len == 0:
+            return
+        swap_index = start_time + random.randint(1, switch_max_len)
+
+        data.observed_bboxes[[idx_a, idx_b], swap_index] = data.observed_bboxes[[idx_b, idx_a], swap_index]
+        data.observed_temporal_mask[[idx_a, idx_b], swap_index] = data.observed_temporal_mask[[idx_b, idx_a], swap_index]
 
 
 def test_identity_switch_augmentation():

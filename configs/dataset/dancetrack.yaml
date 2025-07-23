@@ -8,8 +8,8 @@ index:
     paths:
       - /media/home/DanceTrack-orig/
 
-n_tracks: 20
+n_tracks: 40
 clip_length: 30
 min_clip_tracks: 1
 clip_sampling_step: 1
-val_clip_sampling_step: 10
+val_clip_sampling_step: 1

@@ -21,6 +21,7 @@ Pipeline data structure:
     analysis/*
 """
 import os
+import enum
 
 EXPERIMENTS_DIRNAME = 'experiments'
 TENSORBOARD_DIRNAME = 'tensorboard_logs'
@@ -31,6 +32,12 @@ INFERENCE_VISUALIZATIONS_DIRNAME = 'visualizations'
 CONFIGS_DIRNAME = 'configs'
 ANALYSIS_DIRNAME = 'analysis'
 LAST_CKPT = 'last.pt'
+
+
+class InferenceType(enum.Enum):
+    ACTIVE = 'active'
+    ALL = 'all'
+    POSTPROCESS = 'postprocess'
 
 
 def get_experiment_path(master_path: str, dataset_name: str, experiment_name: str) -> str:
@@ -99,6 +106,33 @@ def get_latest_checkpoint_path(experiment_path: str) -> str:
         Latest checkpoint full path
     """
     return get_checkpoint_path(experiment_path, LAST_CKPT)
+
+
+def get_inferences_path(experiment_path: str) -> str:
+    """
+    Gets the all experiment inference directory path..
+
+    Args:
+        experiment_path: Path to experiment
+
+    Returns:
+        Inferences directory path
+    """
+    return os.path.join(experiment_path, INFERENCES_DIRNAME)
+
+
+def get_inference_path(experiment_path: str, inference_type: InferenceType) -> str:
+    """
+    Gets the inference type path.
+
+    Args:
+        experiment_path: Path to experiment
+        inference_type: Inference type (all, active, postprocess, etc.)
+
+    Returns:
+        Inference path
+    """
+    return os.path.join(get_inferences_path(experiment_path), inference_type.value)
 
 
 def get_config_dirpath(experiment_path: str) -> str:
