@@ -37,6 +37,7 @@ class MyTracker(Tracker):
         sim_threshold: float = 0.5,
         initialization_threshold: int = 1,
         remember_threshold: int = 30,
+        clip_length: Optional[int] = None,
         new_tracklet_detection_threshold: float = 0.7
     ):
         super().__init__()
@@ -53,6 +54,7 @@ class MyTracker(Tracker):
 
         self._initialization_threshold = initialization_threshold
         self._remember_threshold = remember_threshold
+        self._clip_length = clip_length if clip_length is not None else self._remember_threshold
         self._new_tracklet_detection_threshold = new_tracklet_detection_threshold
 
         self._next_id = 0
@@ -122,7 +124,7 @@ class MyTracker(Tracker):
                 frame_index=frame_index,
                 _id=self._next_id,
                 state=TrackletState.NEW if frame_index > self._initialization_threshold else TrackletState.ACTIVE,
-                max_history=self._remember_threshold - 1
+                max_history=self._clip_length - 1
             )
             self._next_id += 1
             new_tracklets.append(new_tracklet)
@@ -139,11 +141,11 @@ class MyTracker(Tracker):
         N = max(n_tracks, n_detections)
 
         # Observed initialization
-        observed_bboxes = torch.zeros(N, self._remember_threshold, MOTClipDataset.BBOX_DIM, dtype=torch.float32)
-        observed_ts = torch.zeros(N, self._remember_threshold, dtype=torch.long)
-        observed_temporal_mask = torch.ones(N, self._remember_threshold, dtype=torch.bool)
+        observed_bboxes = torch.zeros(N, self._clip_length, MOTClipDataset.BBOX_DIM, dtype=torch.float32)
+        observed_ts = torch.zeros(N, self._clip_length, dtype=torch.long)
+        observed_temporal_mask = torch.ones(N, self._clip_length, dtype=torch.bool)
 
-        time_offset = frame_index - self._remember_threshold
+        time_offset = frame_index - self._clip_length
         for t_i, tracklet in enumerate(tracklets):
             for hist_frame_index, bbox in tracklet.history:
                 relative_index = hist_frame_index - time_offset
@@ -231,7 +233,8 @@ def main(cfg: GlobalConfig) -> None:
         tracker = MyTracker(
             model=model,
             device=cfg.resources.accelerator,
-            transform=cfg.dataset.build_transform()
+            transform=cfg.dataset.build_transform(),
+            remember_threshold=30
         )
 
         with TrackerInferenceWriter(tracker_active_output, scene_name, image_height=imheight, image_width=imwidth,

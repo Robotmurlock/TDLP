@@ -48,7 +48,6 @@ class ReversedPositionalEncoding(nn.Module):
 class TrackEncoder(nn.Module):
     def __init__(
         self,
-        input_dim: int,
         hidden_dim: int,
         n_heads: int,
         n_layers: int,
@@ -57,11 +56,6 @@ class TrackEncoder(nn.Module):
     ):
         super().__init__()
         self._hidden_dim = hidden_dim
-
-        # self._tokenizer = nn.Sequential(
-        #     nn.Linear(input_dim, hidden_dim),
-        #     nn.Dropout(dropout)
-        # )
         self._pos_encoder = ReversedPositionalEncoding(hidden_dim)
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=hidden_dim,
@@ -80,7 +74,6 @@ class TrackEncoder(nn.Module):
 
     def forward(self, x: torch.Tensor, masks: torch.Tensor) -> torch.Tensor:
         B, N, T, D = x.shape  # batch, objects, temporal, dim
-        B = x.size(0)
 
         # Tokenize
         x = einops.rearrange(x, 'b n t e -> t (b n) e')
@@ -106,7 +99,6 @@ class TrackEncoder(nn.Module):
 
 def run_test() -> None:
     te = TrackEncoder(
-        input_dim=5,
         hidden_dim=4,
         n_heads=2,
         n_layers=1,

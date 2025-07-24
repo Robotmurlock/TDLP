@@ -32,38 +32,54 @@ class ClipLevelInfoNCE(VideoClipLoss):
         agg_track_mask = track_mask.all(dim=-1)  # shape: (B, N), True indicates missing
         track_labels = torch.arange(N).to(track_x).unsqueeze(0).repeat(B, 1).long()
         det_labels = torch.arange(N).to(det_x).unsqueeze(0).repeat(B, 1).long()
-
-        filtered_track_labels_list = []
-        filtered_det_labels_list = []
-        track_predictions_list = []
-        det_predictions_list = []
-
         losses = []
         for b_i in range(B):
             # extract non-masked labels
             sub_track_labels = track_labels[b_i][~agg_track_mask[b_i]]
             sub_det_labels = det_labels[b_i][~detection_mask[b_i]]
             sub_labels = torch.cat([sub_track_labels, sub_det_labels], dim=0)
-            filtered_track_labels_list.append(sub_track_labels)
-            filtered_det_labels_list.append(sub_det_labels)
 
             # extract non-masked embeddings
             sub_track_x = track_x[b_i][~agg_track_mask[b_i]]
             sub_det_x = det_x[b_i][~detection_mask[b_i]]
-            sub_embeddings = torch.cat([sub_track_x.detach(), sub_det_x], dim=0)
+            sub_embeddings = torch.cat([sub_track_x, sub_det_x], dim=0)
 
             # Calculate losses
             sub_loss = self._loss_func(sub_embeddings, sub_labels)
             losses.append(sub_loss)
 
-            distances = torch.cdist(sub_embeddings[:sub_track_x.shape[0]], sub_embeddings[-sub_det_x.shape[0]:], p=2)
+        # Labels and predictions are still calculated at clip level
+        filtered_track_labels_list = []
+        filtered_det_labels_list = []
+        track_predictions_list = []
+        det_predictions_list = []
+        with torch.no_grad():
+            track_labels = torch.arange(N).to(track_x).unsqueeze(0).repeat(B, 1).long()
+            det_labels = torch.arange(N).to(det_x).unsqueeze(0).repeat(B, 1).long()
+            for b_i in range(B):
+                combined_mask = ~agg_track_mask[b_i] & ~detection_mask[b_i]
+                if not bool(combined_mask.any().item()):
+                    continue
 
-            sub_track_predictions = torch.argmin(distances, dim=1)
-            sub_det_predictions = torch.argmin(distances, dim=0)
-            track_predictions_list.append(sub_track_predictions)
-            det_predictions_list.append(sub_det_predictions)
+                sub_track_labels = track_labels[b_i][combined_mask]
+                sub_det_labels = det_labels[b_i][combined_mask]
+                sub_track_x = track_x[b_i][combined_mask]
+                sub_det_x = det_x[b_i][combined_mask]
+                sub_track_x = F.normalize(sub_track_x, dim=-1)
+                sub_det_x = F.normalize(sub_det_x, dim=-1)
 
-        # Postprocess
+                n_sub_tracks = sub_track_x.shape[0]
+                n_sub_det = sub_det_x.shape[0]
+                if n_sub_tracks > 0 and n_sub_det > 0:
+                    distances = torch.cdist(sub_track_x, sub_det_x, p=2)
+                    sub_track_predictions = torch.argmin(distances, dim=1)
+                    sub_det_predictions = torch.argmin(distances, dim=0)
+
+                    filtered_track_labels_list.append(sub_track_labels)
+                    filtered_det_labels_list.append(sub_det_labels)
+                    track_predictions_list.append(sub_track_predictions)
+                    det_predictions_list.append(sub_det_predictions)
+
         filtered_track_labels = torch.cat(filtered_track_labels_list)
         filtered_det_labels_list = torch.cat(filtered_det_labels_list)
         track_predictions = torch.cat(track_predictions_list)

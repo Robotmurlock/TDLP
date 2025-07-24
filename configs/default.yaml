@@ -4,8 +4,8 @@ defaults:
   - dataset: dancetrack.yaml
   - train: default.yaml
   - eval: default.yaml
-  - model_config: default.yaml
+  - model_config: with_interaction_encoder.yaml
   - path: default.yaml
 
-experiment_name: exp04-fromExp01-MaxTracks40
+experiment_name: exp08-fromExp06-ClipLength10
 dataset_name: DanceTrack
