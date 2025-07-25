@@ -1,5 +1,5 @@
 defaults:
-  - transform: default.yaml
+  - transform: scaled.yaml
   - augmentations: default.yaml
 
 index:

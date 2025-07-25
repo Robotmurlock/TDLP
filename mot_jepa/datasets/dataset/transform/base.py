@@ -2,6 +2,7 @@
 Implementations of data transformations.
 """
 from abc import ABC, abstractmethod
+from typing import List
 
 from mot_jepa.datasets.dataset.common.data import VideoClipData
 
@@ -50,4 +51,15 @@ class IdentityTransform(Transform):
         super().__init__(name='identity')
 
     def apply(self, data: VideoClipData) -> VideoClipData:
+        return data
+
+
+class ComposeTransform(Transform):
+    def __init__(self, transforms: List[Transform]):
+        super().__init__(name='compose')
+        self._transforms = transforms
+
+    def apply(self, data: VideoClipData) -> VideoClipData:
+        for t in self._transforms:
+            data = t(data)
         return data
