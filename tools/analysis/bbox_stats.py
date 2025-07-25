@@ -16,7 +16,7 @@ logger = logging.getLogger('DatasetStatCalculation')
 
 @torch.no_grad()
 @hydra.main(config_path=CONFIGS_PATH, config_name='default', version_base='1.1')
-@pipeline.task('train')
+@pipeline.task('bbox-stats')
 def main(cfg: GlobalConfig) -> None:
     torch.set_printoptions(precision=3, sci_mode=None)
 

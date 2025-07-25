@@ -169,6 +169,7 @@ class GlobalConfig:
     # noinspection PyUnresolvedReferences
     path: PathConfig = field(default_factory=PathConfig.default)
     eval: Optional[EvalConfig] = None
+    analysis: Optional[dict] = None
 
     def __post_init__(self):
         if self.eval.checkpoint is None:

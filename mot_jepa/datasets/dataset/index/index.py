@@ -16,6 +16,7 @@ class FrameObjectData:
     bbox: List[float]
     score: float
     category: str
+    features: Optional[dict] = None
 
     @property
     def frame_id(self) -> int:
