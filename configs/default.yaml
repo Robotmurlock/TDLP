@@ -7,5 +7,5 @@ defaults:
   - model_config: with_interaction_encoder.yaml
   - path: default.yaml
 
-experiment_name: exp09-fromExp06-MinMaxScalingTransform
+experiment_name: exp13-fromExp09-GTBBoxDetConf
 dataset_name: DanceTrack

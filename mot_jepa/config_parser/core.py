@@ -39,6 +39,7 @@ class DatasetConfig:
     min_clip_tracks: int = 1
     clip_sampling_step: int = 1
     val_clip_sampling_step: Optional[int] = None
+    extra_features_path: Optional[str] = None
 
     transform: Optional[dict] = None
     augmentations: Optional[dict] = None
@@ -72,7 +73,8 @@ class DatasetConfig:
             clip_length=self.clip_length,
             clip_sampling_step=clip_sampling_step,
             transform=self.build_transform(disable_transform=disable_transform),
-            augmentations=self.build_augmentations(disable_augmentations=disable_augmentations)
+            augmentations=self.build_augmentations(disable_augmentations=disable_augmentations),
+            extra_features_path=self.extra_features_path
         )
 
 

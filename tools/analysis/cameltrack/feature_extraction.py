@@ -1,4 +1,3 @@
-import json
 import logging
 import os.path
 import pickle
@@ -11,6 +10,8 @@ import hydra
 import numpy as np
 import pandas as pd
 import torch
+from motrack.library.cv import BBox
+from motrack.tracker.matching.utils import hungarian
 from tqdm import tqdm
 
 from mot_jepa.common.project import CONFIGS_PATH
@@ -18,15 +19,10 @@ from mot_jepa.config_parser import GlobalConfig
 from mot_jepa.datasets.common import BasicSceneInfo
 from mot_jepa.datasets.dataset import dataset_index_factory
 from mot_jepa.datasets.dataset.index.index import FrameObjectData
-from mot_jepa.datasets.dataset.index.mot import SceneInfo
 from mot_jepa.utils import pipeline
-from motrack.library.cv import PredBBox, BBox
-from motrack.tracker.matching.utils import hungarian
+from mot_jepa.utils.extra_features import ExtraFeaturesWriter
 
 logger = logging.getLogger('CameltrackFeaturesExtraction')
-
-
-TEMPORARY_DIRNAME = 'tmp'
 
 
 class CamelTrackParser:
@@ -169,15 +165,16 @@ def add_track_ids(pred_frame_data: List[dict], gt_frame_data: List[FrameObjectDa
 
     return pred_frame_data, n_matches, n_unmatches
 
+
 @torch.no_grad()
 @hydra.main(config_path=CONFIGS_PATH, config_name='default', version_base='1.1')
 @pipeline.task('cameltrack-features-extraction')
 def main(cfg: GlobalConfig) -> None:
     # Hardcoded stuff
-    SPLIT = 'train'
-    CAMELTRACK_STATES_PATH = '/media/home/cameltrack-states/dancetrack-train.pklz'
+    SPLIT = 'val'
+    CAMELTRACK_STATES_PATH = f'/media/home/cameltrack-states/dancetrack-{SPLIT}.pklz'
     TEMPORARY_DIRPATH = '/media/home/cameltrack-states/tmp'
-    EXTRACTED_OUTPUT_PATH = '/media/home/cameltrack-states/extracted-train.json'
+    EXTRACTED_OUTPUT_PATH = '/media/home/cameltrack-states/extracted-features'
 
     dataset_index = dataset_index_factory(
         name=cfg.dataset.index.type,
@@ -191,8 +188,8 @@ def main(cfg: GlobalConfig) -> None:
         states_path=CAMELTRACK_STATES_PATH,
         temporary_dirpath=TEMPORARY_DIRPATH
     ) as parser:
+        features_writer = ExtraFeaturesWriter(EXTRACTED_OUTPUT_PATH)
         scenes = dataset_index.scenes
-        dataset_features: Dict[str, Dict[str, List[dict]]] = {scene_name: {} for scene_name in scenes}
         for scene_name in tqdm(scenes, desc='Parsing extra features', unit='scene'):
             scene_info = dataset_index.get_scene_info(scene_name)
             for frame_index in range(scene_info.seqlength):
@@ -205,10 +202,7 @@ def main(cfg: GlobalConfig) -> None:
                 n_total_matches += n_matches
                 n_total_unmatches += n_unmatches
 
-                dataset_features[scene_name][str(frame_index)] = pred_frame_data
-
-    with open(EXTRACTED_OUTPUT_PATH, 'w', encoding='utf-8') as f:
-        json.dump(dataset_features, f)
+                features_writer.write(scene_name, frame_index, pred_frame_data)
 
     matches_ratio = n_total_matches / (n_total_matches + n_total_unmatches)
     unmatches_ratio = n_total_unmatches / (n_total_matches + n_total_unmatches)

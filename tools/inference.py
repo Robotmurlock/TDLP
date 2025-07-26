@@ -38,7 +38,8 @@ class MyTracker(Tracker):
         initialization_threshold: int = 1,
         remember_threshold: int = 30,
         clip_length: Optional[int] = None,
-        new_tracklet_detection_threshold: float = 0.7
+        new_tracklet_detection_threshold: float = 0.7,
+        use_conf: bool = True
     ):
         super().__init__()
 
@@ -58,6 +59,7 @@ class MyTracker(Tracker):
         self._new_tracklet_detection_threshold = new_tracklet_detection_threshold
 
         self._next_id = 0
+        self._use_conf = use_conf
 
 
     def track(self,
@@ -151,8 +153,10 @@ class MyTracker(Tracker):
                 relative_index = hist_frame_index - time_offset
                 if relative_index < 0:
                     continue
-                # serialized_bbox = torch.tensor(bbox.as_numpy_xywh().tolist() + [bbox.conf], dtype=torch.float32)
-                serialized_bbox = torch.tensor(bbox.as_numpy_xywh().tolist() + [1.0], dtype=torch.float32)
+                if self._use_conf:
+                    serialized_bbox = torch.tensor(bbox.as_numpy_xywh().tolist() + [bbox.conf], dtype=torch.float32)
+                else:
+                    serialized_bbox = torch.tensor(bbox.as_numpy_xywh().tolist() + [1.0], dtype=torch.float32)
                 observed_bboxes[t_i, relative_index, :] = serialized_bbox
                 observed_ts[t_i, relative_index] = hist_frame_index
                 observed_temporal_mask[t_i, relative_index] = False
@@ -166,8 +170,10 @@ class MyTracker(Tracker):
         unobserved_temporal_mask[:n_detections] = False
 
         for d_i, detection in enumerate(detections):
-            # serialized_bbox = torch.tensor(detection.as_numpy_xywh().tolist() + [detection.conf], dtype=torch.float32)
-            serialized_bbox = torch.tensor(detection.as_numpy_xywh().tolist() + [1.0], dtype=torch.float32)
+            if self._use_conf:
+                serialized_bbox = torch.tensor(detection.as_numpy_xywh().tolist() + [detection.conf], dtype=torch.float32)
+            else:
+                serialized_bbox = torch.tensor(detection.as_numpy_xywh().tolist() + [1.0], dtype=torch.float32)
             unobserved_bboxes[d_i, :] = serialized_bbox
 
         return VideoClipData(
@@ -234,7 +240,8 @@ def main(cfg: GlobalConfig) -> None:
             model=model,
             device=cfg.resources.accelerator,
             transform=cfg.dataset.build_transform(),
-            remember_threshold=30
+            remember_threshold=30,
+            use_conf=True
         )
 
         with TrackerInferenceWriter(tracker_active_output, scene_name, image_height=imheight, image_width=imwidth,

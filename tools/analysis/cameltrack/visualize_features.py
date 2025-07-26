@@ -1,10 +1,9 @@
-import json
 import logging
 import os.path
+from pathlib import Path
 from typing import List, Tuple
 
 import hydra
-from pathlib import Path
 import torch
 from motrack.library.cv import PredBBox, BBox
 from motrack.library.cv import color_palette
@@ -17,6 +16,7 @@ from mot_jepa.config_parser import GlobalConfig
 from mot_jepa.datasets.dataset import dataset_index_factory
 from mot_jepa.datasets.dataset.index.mot import SceneInfo
 from mot_jepa.utils import pipeline
+from mot_jepa.utils.extra_features import ExtraFeaturesReader
 
 logger = logging.getLogger('CameltrackFeaturesExtraction')
 
@@ -108,7 +108,7 @@ def draw_frame_features(frame: np.ndarray, scene_info: SceneInfo, frame_features
 def main(cfg: GlobalConfig) -> None:
     # Hardcoded stuff
     SPLIT = 'train'
-    EXTRACTED_OUTPUT_PATH = '/media/home/cameltrack-states/extracted-train.json'
+    EXTRACTED_OUTPUT_PATH = '/media/home/cameltrack-states/extracted-features'
     EXTRACTED_VIDEOS_PATH = '/media/home/cameltrack-states/videos'
 
     dataset_index = dataset_index_factory(
@@ -117,17 +117,14 @@ def main(cfg: GlobalConfig) -> None:
         split=SPLIT
     )
 
-    with open(EXTRACTED_OUTPUT_PATH, 'r', encoding='utf-8') as f:
-        dataset_features = json.load(f)
-
     scenes = dataset_index.scenes
     Path(EXTRACTED_VIDEOS_PATH).mkdir(parents=True, exist_ok=True)
     for scene_name in tqdm(scenes, desc='Visualizing extra features', unit='scene'):
+        features_reader = ExtraFeaturesReader(EXTRACTED_OUTPUT_PATH)
         scene_info = dataset_index.get_scene_info(scene_name)
-        scene_features = dataset_features[scene_name]
         with MP4Writer(os.path.join(EXTRACTED_VIDEOS_PATH, f'{scene_name}.mp4'), fps=scene_info.framerate) as mp4_writer:
             for frame_index in range(scene_info.seqlength):
-                frame_features = scene_features[str(frame_index)]
+                frame_features = features_reader.read(scene_name, frame_index)
                 frame_path = dataset_index.get_scene_image_path(scene_name, frame_index)
                 frame = cv2.imread(frame_path)
                 frame = draw_frame_features(frame, scene_info, frame_features)

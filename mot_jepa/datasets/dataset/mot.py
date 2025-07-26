@@ -12,7 +12,7 @@ Dataset sample should be a clip from some scene with tensors:
 """
 import logging
 import random
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional
 
 import cv2
 import numpy as np
@@ -23,6 +23,7 @@ from mot_jepa.datasets.dataset.augmentations import Augmentation
 from mot_jepa.datasets.dataset.common.data import VideoClipData
 from mot_jepa.datasets.dataset.index.index import DatasetIndex
 from mot_jepa.datasets.dataset.transform import Transform
+from mot_jepa.utils.extra_features import ExtraFeaturesReader
 
 logger = logging.getLogger('MOTClipDataset')
 
@@ -42,7 +43,8 @@ class MOTClipDataset(Dataset):
         transform: Transform,
         augmentations: Augmentation,
         min_clip_tracks: int = 1,
-        clip_sampling_step: int = 1
+        clip_sampling_step: int = 1,
+        extra_features_path: Optional[str] = None
     ):
         """
         Args:
@@ -79,6 +81,12 @@ class MOTClipDataset(Dataset):
         # Transforms
         self._transform = transform
         self._augmentations = augmentations
+
+        # Extra features
+        self._extra_features_reader: Optional[ExtraFeaturesReader] = None
+        if extra_features_path is not None:
+            logger.info(f'Using extra features from "{extra_features_path}".')
+            self._extra_features_reader = ExtraFeaturesReader(extra_features_path)
 
         logger.info(f'Number of sampled clips: {len(self._clip_index)}.')
 
@@ -162,7 +170,9 @@ class MOTClipDataset(Dataset):
         end_index: int,
         start_time: int,
         temporal_length: int,
-        remove_temporal_dim: bool = False
+        remove_temporal_dim: bool = False,
+        use_extra_data: bool = False,
+        include_extra_false_positives: bool = False
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Extracts scene per-frame video clip data. It extracts bboxes for each object for each frame.
@@ -180,11 +190,11 @@ class MOTClipDataset(Dataset):
             - Relative timestamps
             - Temporal mask (1 if an object is missing else 0)
         """
-        object_ids = self._index.get_objects_present_in_scene_clip(scene_name, start_index, end_index)
-        if len(object_ids) > self._n_tracks:
-            logger.debug(f'Too many tracks: Maximum is {self._n_tracks} but got {len(object_ids)}. '
+        object_ids = sorted(self._index.get_objects_present_in_scene_clip(scene_name, start_index, end_index))
+        n_object_ids = len(object_ids)
+        if n_object_ids > self._n_tracks:
+            logger.warning(f'Too many tracks for scene {scene_name}: Maximum is {self._n_tracks} but got {n_object_ids}. '
                          f'Removing at random...')
-            random.shuffle(object_ids)
             object_ids = object_ids[:self._n_tracks]
 
         bboxes = torch.zeros(self._n_tracks, temporal_length, self.BBOX_DIM, dtype=torch.float32)
@@ -193,16 +203,44 @@ class MOTClipDataset(Dataset):
         temporal_mask = torch.ones(self._n_tracks, temporal_length, dtype=torch.bool)
 
         for clip_index, frame_index in enumerate(range(start_index, end_index)):
+            extra_data = self._extra_features_reader.read(scene_name, frame_index) if self._extra_features_reader is not None else None
+
+            object_id_to_extra_data_lookup: Dict[str, dict] = {raw['object_id']: raw for raw in extra_data if raw['object_id'] is not None}
             for object_index, object_id in enumerate(object_ids):
-                data = self._index.get_object_data_label_by_frame_index(object_id, frame_index)
-                if data is None:
+                # BBox
+                bbox: Optional[torch.Tensor] = None
+
+                # Try to fetch OD mined bbox
+                if extra_data:
+                    data = object_id_to_extra_data_lookup.get(object_id)
+                    if data is not None:
+                        bbox = self.bbox_to_tensor(data['bbox_xywh'], data['bbox_conf'])
+                else:
+                    data = self._index.get_object_data_label_by_frame_index(object_id, frame_index)
+                    if data is not None:
+                        bbox = self.bbox_to_tensor(data.bbox, data.score)
+
+                if bbox is None:
                     continue
+
+                bboxes[object_index, clip_index, :] = bbox
 
                 # Mask
                 temporal_mask[object_index, clip_index] = False
 
-                # BBox
-                bboxes[object_index, clip_index, :] = self.bbox_to_tensor(data.bbox, data.score)
+            # Add extra false positives (specific augmentation type)
+            if extra_data and include_extra_false_positives:
+                assert remove_temporal_dim, 'This data update should not be applied to tracks!'
+                extra_false_positives = [raw for raw in extra_data if raw['object_id'] is None]
+                random.shuffle(extra_false_positives)
+                n_extra_positives = min(self._n_tracks - n_object_ids, len(extra_false_positives))
+                extra_false_positives = extra_false_positives[:n_extra_positives]
+                for data_index, object_index in enumerate(range(n_object_ids, n_object_ids + n_extra_positives)):
+                    data = extra_false_positives[data_index]
+                    bbox = self.bbox_to_tensor(data['bbox_xywh'], data['bbox_conf'])
+
+                    bboxes[object_index, clip_index, :] = bbox
+                    temporal_mask[object_index, clip_index] = False
 
         if remove_temporal_dim:
             assert temporal_length == 1, 'Can\'t remove temporal dim unless it has length of 1!'
@@ -230,7 +268,8 @@ class MOTClipDataset(Dataset):
             start_index=start_index,
             end_index=observed_end_index,
             start_time=0,
-            temporal_length=self._clip_length
+            temporal_length=self._clip_length,
+            use_extra_data=True
         )
 
         unobserved_bboxes, unobserved_ts, unobserved_temporal_mask = self._extract_scene_clip_data(
@@ -239,7 +278,8 @@ class MOTClipDataset(Dataset):
             end_index=observed_end_index + 1,
             start_time=self._clip_length,
             temporal_length=1,
-            remove_temporal_dim=True
+            remove_temporal_dim=True,
+            use_extra_data=True
         )
 
         return VideoClipData(

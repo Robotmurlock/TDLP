@@ -13,3 +13,4 @@ clip_length: 30
 min_clip_tracks: 1
 clip_sampling_step: 1
 val_clip_sampling_step: 1
+extra_features_path: /media/home/cameltrack-states/extracted-features
