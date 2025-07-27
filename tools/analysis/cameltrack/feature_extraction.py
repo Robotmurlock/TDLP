@@ -138,7 +138,7 @@ def postprocess_data(scene_info: BasicSceneInfo, pred_frame_data: List[dict]) ->
     return pred_frame_data
 
 
-def add_track_ids(pred_frame_data: List[dict], gt_frame_data: List[FrameObjectData], threshold: float = 0.3) -> Tuple[List[dict], int, int]:
+def add_track_ids(pred_frame_data: List[dict], gt_frame_data: List[FrameObjectData], threshold: float = 0.7) -> Tuple[List[dict], int, int]:
     pred_bboxes: List[BBox] = []
     for pred_object_data in pred_frame_data:
         pred_bboxes.append(BBox.from_xywh(*pred_object_data['bbox_xywh']))
@@ -171,7 +171,7 @@ def add_track_ids(pred_frame_data: List[dict], gt_frame_data: List[FrameObjectDa
 @pipeline.task('cameltrack-features-extraction')
 def main(cfg: GlobalConfig) -> None:
     # Hardcoded stuff
-    SPLIT = 'val'
+    SPLIT = 'train'
     CAMELTRACK_STATES_PATH = f'/media/home/cameltrack-states/dancetrack-{SPLIT}.pklz'
     TEMPORARY_DIRPATH = '/media/home/cameltrack-states/tmp'
     EXTRACTED_OUTPUT_PATH = '/media/home/cameltrack-states/extracted-features'

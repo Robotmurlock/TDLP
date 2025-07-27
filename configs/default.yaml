@@ -7,5 +7,5 @@ defaults:
   - model_config: with_interaction_encoder.yaml
   - path: default.yaml
 
-experiment_name: exp13-fromExp09-GTBBoxDetConf
+experiment_name: exp10-fromExp09-DetectionFeatures
 dataset_name: DanceTrack

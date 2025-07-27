@@ -74,7 +74,7 @@ class DatasetConfig:
             clip_sampling_step=clip_sampling_step,
             transform=self.build_transform(disable_transform=disable_transform),
             augmentations=self.build_augmentations(disable_augmentations=disable_augmentations),
-            extra_features_path=self.extra_features_path
+            extra_features_path=self.extra_features_path if not test else None
         )
 
 

@@ -203,9 +203,10 @@ class MOTClipDataset(Dataset):
         temporal_mask = torch.ones(self._n_tracks, temporal_length, dtype=torch.bool)
 
         for clip_index, frame_index in enumerate(range(start_index, end_index)):
-            extra_data = self._extra_features_reader.read(scene_name, frame_index) if self._extra_features_reader is not None else None
+            extra_data = self._extra_features_reader.read(scene_name, frame_index) if self._extra_features_reader is not None and use_extra_data else None
 
-            object_id_to_extra_data_lookup: Dict[str, dict] = {raw['object_id']: raw for raw in extra_data if raw['object_id'] is not None}
+            object_id_to_extra_data_lookup: Dict[str, dict] = {raw['object_id']: raw for raw in extra_data if raw['object_id'] is not None} \
+                if extra_data is not None else {}
             for object_index, object_id in enumerate(object_ids):
                 # BBox
                 bbox: Optional[torch.Tensor] = None
@@ -279,7 +280,8 @@ class MOTClipDataset(Dataset):
             start_time=self._clip_length,
             temporal_length=1,
             remove_temporal_dim=True,
-            use_extra_data=True
+            use_extra_data=True,
+            include_extra_false_positives=True
         )
 
         return VideoClipData(

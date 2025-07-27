@@ -241,7 +241,8 @@ def main(cfg: GlobalConfig) -> None:
             device=cfg.resources.accelerator,
             transform=cfg.dataset.build_transform(),
             remember_threshold=30,
-            use_conf=True
+            use_conf=True,
+            sim_threshold=0.8
         )
 
         with TrackerInferenceWriter(tracker_active_output, scene_name, image_height=imheight, image_width=imwidth,
