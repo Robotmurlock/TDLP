@@ -1,9 +1,17 @@
 _target_: mot_jepa.datasets.dataset.augmentations.base.CompositionAugmentation
 augmentations:
   - _target_: mot_jepa.datasets.dataset.augmentations.bbox.BBoxGaussianNoiseAugmentation
-    proba: 0.5
     sigma: 0.05
-    unobs_noise: true
+    proba: 0.40
+    unobs_noise: True
+  - _target_: mot_jepa.datasets.dataset.augmentations.bbox.BBoxGaussianNoiseAugmentation
+    sigma: 0.10
+    proba: 0.10
+    unobs_noise: True
+  - _target_: mot_jepa.datasets.dataset.augmentations.bbox.BBoxGaussianNoiseAugmentation
+    sigma: 0.25
+    proba: 0.05
+    unobs_noise: True
   - _target_: mot_jepa.datasets.dataset.augmentations.video.OcclusionAugmentations
     drop_ratio: 0.5
   - _target_: mot_jepa.datasets.dataset.augmentations.video.IdentitySwitchAugmentation
