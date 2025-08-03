@@ -12,8 +12,10 @@ augmentations:
     sigma: 0.25
     proba: 0.05
     unobs_noise: True
-  - _target_: mot_jepa.datasets.dataset.augmentations.video.OcclusionAugmentations
-    drop_ratio: 0.5
+  - _target_: mot_jepa.datasets.dataset.augmentations.video.PointOcclusionAugmentations
+    drop_ratio: 0.3
+  - _target_: mot_jepa.datasets.dataset.augmentations.video.LeftOrRightOcclusionAugmentations
+    drop_ratio: 0.2
   - _target_: mot_jepa.datasets.dataset.augmentations.video.IdentitySwitchAugmentation
     switch_ratio: 0.3
 

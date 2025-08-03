@@ -8,9 +8,9 @@ from mot_jepa.datasets.dataset.augmentations.base import Augmentation
 from mot_jepa.datasets.dataset.common.data import VideoClipData
 
 
-class OcclusionAugmentations(Augmentation):
+class PointOcclusionAugmentations(Augmentation):
     """
-    Remove parts of observed track (simulate occlusions)
+    Remove points of observed track (simulate occlusions)
     """
     def __init__(self, drop_ratio: float, occlude_unobs: bool = False):
         super().__init__()
@@ -35,6 +35,34 @@ class OcclusionAugmentations(Augmentation):
             for n in range(n_detections):
                 if random.random() < self._drop_ratio / clip_length:
                     data.unobserved_temporal_mask[n] = True
+
+        return data
+
+
+class LeftOrRightOcclusionAugmentations(Augmentation):
+    """
+    Remove the left or the right part of the observed track (simulate occlusions)
+    """
+    def __init__(self, drop_ratio: float, min_length: int = 1):
+        super().__init__()
+        self._drop_ratio = drop_ratio
+        self._min_length = min_length
+
+    def apply(self, data: VideoClipData) -> VideoClipData:
+        traj_length = data.observed_temporal_mask.shape[0]
+        if traj_length < self._min_length:
+            return data
+
+        if random.random() > self._drop_ratio:
+            return data
+
+        occlusion_point = random.randrange(self._min_length, traj_length - self._min_length)
+        if random.random() > 0.5:
+            data.observed_bboxes[occlusion_point:, :] = 0
+            data.observed_temporal_mask[occlusion_point:] = True
+        else:
+            data.observed_bboxes[:occlusion_point, :] = 0
+            data.observed_temporal_mask[:occlusion_point] = True
 
         return data
 

@@ -7,5 +7,5 @@ defaults:
   - model_config: with_interaction_encoder.yaml
   - path: default.yaml
 
-experiment_name: exp12-fromExp10-StrongerBBoxJitter
+experiment_name: exp20-fromExp19-FodTimeScaledTransform
 dataset_name: DanceTrack

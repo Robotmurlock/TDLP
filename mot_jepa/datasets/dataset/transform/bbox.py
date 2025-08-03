@@ -46,7 +46,8 @@ class BBoxFODStandardization(Transform):
         coord_mean: List[float],
         coord_std: List[float],
         fod_mean: List[float],
-        fod_std: List[float]
+        fod_std: List[float],
+        fod_time_scaled: bool = False
     ):
         super().__init__(name='bbox_fod_standardization')
 
@@ -60,11 +61,27 @@ class BBoxFODStandardization(Transform):
         self._coord_std = torch.tensor(coord_std, dtype=torch.float32)
         self._fod_mean = torch.tensor(fod_mean, dtype=torch.float32)
         self._fod_std = torch.tensor(fod_std, dtype=torch.float32)
+        self._fod_time_scaled = fod_time_scaled
 
     def apply(self, data: VideoClipData) -> VideoClipData:
-        fod = torch.zeros_like(data.observed_bboxes)
-        fod[:, 1:, :] = (data.observed_bboxes[:, 1:, :] - data.observed_bboxes[:, :-1, :] - self._fod_mean) / self._fod_std
-        fod[:, 1:, :] = fod[:, 1:, :] * (1 - data.observed_temporal_mask[:, :-1].unsqueeze(-1).repeat(1, 1, data.observed_bboxes.shape[-1]).float())
+        if self._fod_time_scaled:
+            bboxes = data.observed_bboxes
+            mask = data.observed_temporal_mask
+            fod = torch.zeros_like(bboxes)
+            ts = data.observed_ts.unsqueeze(-1).repeat(1, 1, bboxes.shape[-1])
+            for n in range(bboxes.shape[0]):
+                ts_n = ts[n][~mask[n]]
+                bboxes_n = bboxes[n][~mask[n]]
+                if bboxes_n.shape[0] == 0:
+                    continue
+
+                bboxes_n[1:, :] = (bboxes_n[1:, :] - bboxes_n[:-1, :]) / (ts_n[1:, :] - ts_n[:-1, :])
+                bboxes_n[0, :] = 0
+                fod[n][~mask[n]] = bboxes_n
+        else:
+            fod = torch.zeros_like(data.observed_bboxes)
+            fod[:, 1:, :] = (data.observed_bboxes[:, 1:, :] - data.observed_bboxes[:, :-1, :] - self._fod_mean) / self._fod_std
+            fod[:, 1:, :] = fod[:, 1:, :] * (1 - data.observed_temporal_mask[:, :-1].unsqueeze(-1).repeat(1, 1, data.observed_bboxes.shape[-1]).float())
 
         data.observed_bboxes = (data.observed_bboxes - self._coord_mean) / self._coord_std  # Centralize
         data.unobserved_bboxes = (data.unobserved_bboxes - self._coord_mean) / self._coord_std  # Centralize

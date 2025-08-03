@@ -7,3 +7,4 @@ transforms:
     coord_std: [0.1, 0.1, 0.1, 0.1, 1.0]
     fod_mean: [0.0, 0.0, 0.0, 0.0, 0.0]
     fod_std: [0.05, 0.05, 0.05, 0.05, 1.0]
+    fod_time_scaled: true

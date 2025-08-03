@@ -1,12 +1,14 @@
 import torch
 from torch import nn
+from typing import Optional
 
 
 class TrackToDetectionProjector(nn.Module):
-    def __init__(self, hidden_dim: int, intermediate_hidden_dim: int):
+    def __init__(self, hidden_dim: int, intermediate_hidden_dim: int, input_dim: Optional[int] = None):
         super().__init__()
+        input_dim = input_dim if input_dim is not None else hidden_dim
         self._projector = nn.Sequential(
-            nn.Linear(hidden_dim, intermediate_hidden_dim),
+            nn.Linear(input_dim, intermediate_hidden_dim),
             nn.LayerNorm(intermediate_hidden_dim),
             nn.SiLU(),
             nn.Linear(intermediate_hidden_dim, hidden_dim)
