@@ -11,19 +11,17 @@ Dataset sample should be a clip from some scene with tensors:
 - Mask tensor (N, T) of bools (missing tracks and missing track's times)
 """
 import logging
-import random
 from typing import List, Tuple, Dict, Any, Optional
 
 import cv2
 import numpy as np
-import torch
 from torch.utils.data import Dataset
 
 from mot_jepa.datasets.dataset.augmentations import Augmentation
 from mot_jepa.datasets.dataset.common.data import VideoClipData
+from mot_jepa.datasets.dataset.feature_extractor import GTBBoxFeatureExtractor, feature_extractor_factory
 from mot_jepa.datasets.dataset.index.index import DatasetIndex
 from mot_jepa.datasets.dataset.transform import Transform
-from mot_jepa.utils.extra_features import ExtraFeaturesReader
 
 logger = logging.getLogger('MOTClipDataset')
 
@@ -33,7 +31,6 @@ class MOTClipDataset(Dataset):
     MOT video clip-based dataset. It samples random video clips based on the dataset frame index.
     """
     BBOX_DIM = 5
-    CROP_CHANNELS = 3
 
     def __init__(
         self,
@@ -44,7 +41,8 @@ class MOTClipDataset(Dataset):
         augmentations: Augmentation,
         min_clip_tracks: int = 1,
         clip_sampling_step: int = 1,
-        extra_features_path: Optional[str] = None
+        feature_extractor_type: Optional[str] = None,
+        feature_extractor_params: Optional[dict] = None
     ):
         """
         Args:
@@ -78,15 +76,31 @@ class MOTClipDataset(Dataset):
             clip_sampling_step=clip_sampling_step
         )
 
+        # Create mapping (object_id -> unique number)
+        self._id_lookup = self._create_id_lookup(index)
+
         # Transforms
         self._transform = transform
         self._augmentations = augmentations
 
-        # Extra features
-        self._extra_features_reader: Optional[ExtraFeaturesReader] = None
-        if extra_features_path is not None:
-            logger.info(f'Using extra features from "{extra_features_path}".')
-            self._extra_features_reader = ExtraFeaturesReader(extra_features_path)
+        # Features
+        assert (feature_extractor_type is None) == (feature_extractor_params is None), \
+            f'Either set both type and params for feature extractor or neither!'
+        if feature_extractor_type is None:
+            logger.warning(f'Feature extractor not set, using {GTBBoxFeatureExtractor.__name__} as the default one!')
+            self._feature_extractor = GTBBoxFeatureExtractor(
+                index=index,
+                object_id_mapping=self._id_lookup,
+                n_track=n_tracks
+            )
+        else:
+            self._feature_extractor = feature_extractor_factory(
+                extractor_type=feature_extractor_type,
+                extractor_params=feature_extractor_params,
+                index=index,
+                object_id_mapping=self._id_lookup,
+                n_tracks=n_tracks,
+            )
 
         logger.info(f'Number of sampled clips: {len(self._clip_index)}.')
 
@@ -146,114 +160,49 @@ class MOTClipDataset(Dataset):
 
         return clip_index
 
+    @staticmethod
+    def _create_id_lookup(index: DatasetIndex) -> Dict[str, int]:
+        """
+        Creates mapping (object_id -> unique number), as numbers are more convenient for training.
+
+        Args:
+            index: DatasetIndex
+
+        Returns:
+            Mapping (object_id -> unique number)
+        """
+        object_ids: List[str] = []
+        for scene_name in index.scenes:
+            object_ids.extend(index.get_objects_present_in_scene(scene_name))
+
+        assert len(object_ids) == len(set(object_ids)), f'Found unexpected object duplicates!'
+        object_ids = sorted(object_ids)
+        return {object_id: i for i, object_id in enumerate(object_ids)}
+
     def __len__(self) -> int:
         return len(self._clip_index)
 
-    @staticmethod
-    def bbox_to_tensor(bbox: List[float], score: float) -> torch.Tensor:
-        """
-        Convert BBox to torch tensor.
-
-        Args:
-            bbox: BBox
-            score: Detection confidence score
-
-        Returns:
-            BBox tensor
-        """
-        return torch.tensor([*bbox, score], dtype=torch.float32)
-
-    def _extract_scene_clip_data(
-        self,
-        scene_name: str,
-        start_index: int,
-        end_index: int,
-        start_time: int,
-        temporal_length: int,
-        remove_temporal_dim: bool = False,
-        use_extra_data: bool = False,
-        include_extra_false_positives: bool = False
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Extracts scene per-frame video clip data. It extracts bboxes for each object for each frame.
-
-        Args:
-            scene_name: Scene name
-            start_index: Clip start index
-            end_index: Clip end index
-            start_time: Start time
-            temporal_length: Temporal (clip) length
-            remove_temporal_dim: Remove temporal dimension (only possible if clip length is equal to 1)
-
-        Returns: torch tensors
-            - BBoxes
-            - Relative timestamps
-            - Temporal mask (1 if an object is missing else 0)
-        """
-        object_ids = sorted(self._index.get_objects_present_in_scene_clip(scene_name, start_index, end_index))
-        n_object_ids = len(object_ids)
-        if n_object_ids > self._n_tracks:
-            logger.warning(f'Too many tracks for scene {scene_name}: Maximum is {self._n_tracks} but got {n_object_ids}. '
-                         f'Removing at random...')
-            object_ids = object_ids[:self._n_tracks]
-
-        bboxes = torch.zeros(self._n_tracks, temporal_length, self.BBOX_DIM, dtype=torch.float32)
-        times = torch.arange(start_time, start_time + temporal_length, dtype=torch.long) \
-            .unsqueeze(0).repeat(self._n_tracks, 1)
-        temporal_mask = torch.ones(self._n_tracks, temporal_length, dtype=torch.bool)
-
-        for clip_index, frame_index in enumerate(range(start_index, end_index)):
-            extra_data = self._extra_features_reader.read(scene_name, frame_index) if self._extra_features_reader is not None and use_extra_data else None
-
-            object_id_to_extra_data_lookup: Dict[str, dict] = {raw['object_id']: raw for raw in extra_data if raw['object_id'] is not None} \
-                if extra_data is not None else {}
-            for object_index, object_id in enumerate(object_ids):
-                # BBox
-                bbox: Optional[torch.Tensor] = None
-
-                # Try to fetch OD mined bbox
-                if extra_data:
-                    data = object_id_to_extra_data_lookup.get(object_id)
-                    if data is not None:
-                        bbox = self.bbox_to_tensor(data['bbox_xywh'], data['bbox_conf'])
-                else:
-                    data = self._index.get_object_data_label_by_frame_index(object_id, frame_index)
-                    if data is not None:
-                        bbox = self.bbox_to_tensor(data.bbox, data.score)
-
-                if bbox is None:
-                    continue
-
-                bboxes[object_index, clip_index, :] = bbox
-
-                # Mask
-                temporal_mask[object_index, clip_index] = False
-
-            # Add extra false positives (specific augmentation type)
-            if extra_data and include_extra_false_positives:
-                assert remove_temporal_dim, 'This data update should not be applied to tracks!'
-                extra_false_positives = [raw for raw in extra_data if raw['object_id'] is None]
-                random.shuffle(extra_false_positives)
-                n_extra_positives = min(self._n_tracks - n_object_ids, len(extra_false_positives))
-                extra_false_positives = extra_false_positives[:n_extra_positives]
-                for data_index, object_index in enumerate(range(n_object_ids, n_object_ids + n_extra_positives)):
-                    data = extra_false_positives[data_index]
-                    bbox = self.bbox_to_tensor(data['bbox_xywh'], data['bbox_conf'])
-
-                    bboxes[object_index, clip_index, :] = bbox
-                    temporal_mask[object_index, clip_index] = False
-
-        if remove_temporal_dim:
-            assert temporal_length == 1, 'Can\'t remove temporal dim unless it has length of 1!'
-            bboxes = bboxes[:, 0, :]
-            times = times[:, 0]
-            temporal_mask = temporal_mask[:, 0]
-
-        return bboxes, times, temporal_mask
-
     def get_raw(self, index: int) -> VideoClipData:
         """
-        Get raw clip data (without any transformations)
+        Get raw clip data (without any transformations).
+
+        Full data structure: {
+            observed: # NOTE: This part (or the unobserved is extracted and returned)
+                ids: ...
+                ts: ...
+                mask: ...
+                features: {
+                    bbox_xywh: ...
+                    bbox_conf: ...
+                    keypoints_xyc: ...
+                    keypoints_conf: ...
+                    appearance: ...
+                }
+            unobserved: ...
+        }
+
+        Notes:
+            - if `use_extra_data=False`, then only X.features.bbox_xywh are available!
 
         Args:
             index: Dataset index
@@ -264,33 +213,15 @@ class MOTClipDataset(Dataset):
         scene_name, start_index, end_index = self._clip_index[index]
 
         observed_end_index = start_index + self._clip_length
-        observed_bboxes, observed_ts, observed_temporal_mask = self._extract_scene_clip_data(
-            scene_name=scene_name,
-            start_index=start_index,
-            end_index=observed_end_index,
-            start_time=0,
-            temporal_length=self._clip_length,
-            use_extra_data=True
-        )
 
-        unobserved_bboxes, unobserved_ts, unobserved_temporal_mask = self._extract_scene_clip_data(
+        return self._feature_extractor(
             scene_name=scene_name,
-            start_index=observed_end_index,
-            end_index=observed_end_index + 1,
-            start_time=self._clip_length,
-            temporal_length=1,
-            remove_temporal_dim=True,
-            use_extra_data=True,
-            include_extra_false_positives=True
-        )
-
-        return VideoClipData(
-            observed_bboxes=observed_bboxes,
-            observed_ts=observed_ts,
-            observed_temporal_mask=observed_temporal_mask,
-            unobserved_bboxes=unobserved_bboxes,
-            unobserved_ts=unobserved_ts,
-            unobserved_temporal_mask=unobserved_temporal_mask
+            observed_start_index=start_index,
+            observed_start_time=0,
+            observed_temporal_length=self._clip_length,
+            unobserved_start_index=observed_end_index,
+            unobserved_start_time=self._clip_length,
+            unobserved_temporal_length=1,
         )
 
     def __getitem__(self, index: int) -> Dict[str, Any]:
@@ -310,8 +241,8 @@ class MOTClipDataset(Dataset):
         assert image is not None, f'Failed to load image "{scene_image_path}".'
 
         # Visualize detections
-        unobserved_bboxes = raw.unobserved_bboxes
-        unobserved_temporal_mask = raw.unobserved_temporal_mask
+        unobserved_bboxes = raw.unobserved.features['bbox']
+        unobserved_temporal_mask = raw.unobserved.mask
         for obj_index in range(unobserved_bboxes.shape[0]):
             if bool(unobserved_temporal_mask[obj_index].bool().item()):
                 continue
@@ -328,8 +259,8 @@ class MOTClipDataset(Dataset):
             image = cv2.rectangle(image, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 0, 255), 2)
 
         # Visualize track history
-        observed_bboxes = raw.observed_bboxes
-        observed_temporal_mask = raw.observed_temporal_mask
+        observed_bboxes = raw.observed.features['bbox']
+        observed_temporal_mask = raw.observed.mask
         for obj_index in range(observed_bboxes.shape[0]):
             points = []
             for temporal_index in range(observed_bboxes.shape[1]):

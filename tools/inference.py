@@ -23,7 +23,8 @@ from mot_jepa.common import conventions
 from mot_jepa.common.project import CONFIGS_PATH
 from mot_jepa.config_parser import GlobalConfig
 from mot_jepa.datasets.dataset import dataset_index_factory
-from mot_jepa.datasets.dataset.mot import VideoClipData, MOTClipDataset
+from mot_jepa.datasets.dataset.common.data import VideoClipData, VideoClipPart
+from mot_jepa.datasets.dataset.mot import MOTClipDataset
 from mot_jepa.datasets.dataset.motrack import MotrackDatasetWrapper
 from mot_jepa.datasets.dataset.transform import Transform
 from mot_jepa.utils import pipeline
@@ -72,13 +73,13 @@ class MyTracker(Tracker):
 
 
         data = self._convert_data(tracklets, detections, frame_index)
-        data = self._transform(data).serialize()
-        data = {k: v.unsqueeze(0).to(self._device) for k, v in data.items()}
+        data = self._transform(data)
+        data.apply(lambda x: x.unsqueeze(0).to(self._device))
         track_features, det_features = self._model(
-            data['observed_bboxes'],
-            data['observed_temporal_mask'],
-            data['unobserved_bboxes'],
-            data['unobserved_temporal_mask'],
+            data.observed.features['bbox'],
+            data.observed.mask,
+            data.unobserved.features['bbox'],
+            data.unobserved.mask
         )
         track_features = track_features[0].cpu()
         det_features = det_features[0].cpu()
@@ -183,12 +184,22 @@ class MyTracker(Tracker):
             unobserved_bboxes[d_i, :] = serialized_bbox
 
         return VideoClipData(
-            observed_bboxes=observed_bboxes,
-            observed_ts=observed_ts,
-            observed_temporal_mask=observed_temporal_mask,
-            unobserved_bboxes=unobserved_bboxes,
-            unobserved_ts=unobserved_ts,
-            unobserved_temporal_mask=unobserved_temporal_mask
+            observed=VideoClipPart(
+                ids=None,
+                ts=observed_ts,
+                mask=observed_temporal_mask,
+                features={
+                    'bbox': observed_bboxes
+                }
+            ),
+            unobserved=VideoClipPart(
+                ids=None,
+                ts=unobserved_ts,
+                mask=unobserved_temporal_mask,
+                features={
+                    'bbox': unobserved_bboxes
+                }
+            )
         )
 
 
@@ -312,7 +323,7 @@ class MyByteTracker(MyTracker):
 
 
 @torch.no_grad()
-@hydra.main(config_path=CONFIGS_PATH, config_name='default', version_base='1.1')
+@hydra.main(config_path=CONFIGS_PATH, config_name='default', version_base='1.2')
 @pipeline.task('inference')
 def main(cfg: GlobalConfig) -> None:
     torch.set_printoptions(precision=3, sci_mode=None)

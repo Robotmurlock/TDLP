@@ -237,10 +237,10 @@ class ContrastiveTrainer:
             data = torch_helper.to_device(data, device=self._device)
 
             # Extract data
-            track_bboxes = data['observed_bboxes']
-            track_mask = data['observed_temporal_mask']
-            det_bboxes = data['unobserved_bboxes']
-            det_mask = data['unobserved_temporal_mask']
+            track_bboxes = data['observed']['features']['bbox']
+            track_mask = data['observed']['mask']
+            det_bboxes = data['unobserved']['features']['bbox']
+            det_mask = data['unobserved']['mask']
 
             self._optimizer.zero_grad()
             track_features, det_features = self._model(track_bboxes, track_mask, det_bboxes, det_mask)
@@ -268,6 +268,10 @@ class ContrastiveTrainer:
             'train-epoch/track-accuracy': track_accuracy_meter.aggregate_and_flush(),
             'train-epoch/detection-accuracy': det_accuracy_meter.aggregate_and_flush(),
         })
+
+        torch.cuda.empty_cache()
+        gc.collect()
+
         return epoch_metrics
 
     def _eval_epoch(self, val_loader: 'DataLoader') -> Dict[str, float]:
@@ -289,10 +293,10 @@ class ContrastiveTrainer:
             data = torch_helper.to_device(data, device=self._device)
 
             # Extract data
-            track_bboxes = data['observed_bboxes']
-            track_mask = data['observed_temporal_mask']
-            det_bboxes = data['unobserved_bboxes']
-            det_mask = data['unobserved_temporal_mask']
+            track_bboxes = data['observed']['features']['bbox']
+            track_mask = data['observed']['mask']
+            det_bboxes = data['unobserved']['features']['bbox']
+            det_mask = data['unobserved']['mask']
 
             track_features, det_features = self._model(track_bboxes, track_mask, det_bboxes, det_mask)
             loss_dict = self._loss_func(track_features, det_features, track_mask, det_mask)
@@ -313,6 +317,10 @@ class ContrastiveTrainer:
             'val-epoch/track-accuracy': track_accuracy_meter.aggregate_and_flush(),
             'val-epoch/detection-accuracy': det_accuracy_meter.aggregate_and_flush(),
         })
+
+        torch.cuda.empty_cache()
+        gc.collect()
+
         return epoch_metrics
 
     @torch_distrib_utils.rank_zero_only

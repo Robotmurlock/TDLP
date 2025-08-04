@@ -5,7 +5,7 @@ from typing import Tuple
 import torch
 
 from mot_jepa.datasets.dataset.augmentations.base import Augmentation
-from mot_jepa.datasets.dataset.common.data import VideoClipData
+from mot_jepa.datasets.dataset.common.data import VideoClipData, VideoClipPart
 
 
 class PointOcclusionAugmentations(Augmentation):
@@ -18,7 +18,7 @@ class PointOcclusionAugmentations(Augmentation):
         self._occlude_unobs = occlude_unobs
 
     def apply(self, data: VideoClipData) -> VideoClipData:
-        n_tracks, clip_length = data.observed_temporal_mask.shape
+        n_tracks, clip_length = data.observed.mask.shape
 
         observed_remove_masks = torch.zeros((n_tracks, clip_length), dtype=torch.bool)
 
@@ -28,13 +28,13 @@ class PointOcclusionAugmentations(Augmentation):
                 observed_max_interval = clip_length - observed_begin
                 observed_end = observed_begin + math.ceil(observed_max_interval * random.random())
                 observed_remove_masks[n, observed_begin:observed_end] = True
-        data.observed_temporal_mask = data.observed_temporal_mask | observed_remove_masks
+        data.observed.mask = data.observed.mask | observed_remove_masks
 
         if self._occlude_unobs:
-            n_detections = data.unobserved_temporal_mask.shape[0]
+            n_detections = data.unobserved.mask.shape[0]
             for n in range(n_detections):
                 if random.random() < self._drop_ratio / clip_length:
-                    data.unobserved_temporal_mask[n] = True
+                    data.unobserved.mask[n] = True
 
         return data
 
@@ -49,7 +49,7 @@ class LeftOrRightOcclusionAugmentations(Augmentation):
         self._min_length = min_length
 
     def apply(self, data: VideoClipData) -> VideoClipData:
-        traj_length = data.observed_temporal_mask.shape[0]
+        traj_length = data.observed.mask.shape[0]
         if traj_length < self._min_length:
             return data
 
@@ -58,11 +58,9 @@ class LeftOrRightOcclusionAugmentations(Augmentation):
 
         occlusion_point = random.randrange(self._min_length, traj_length - self._min_length)
         if random.random() > 0.5:
-            data.observed_bboxes[occlusion_point:, :] = 0
-            data.observed_temporal_mask[occlusion_point:] = True
+            data.observed.mask[occlusion_point:] = True
         else:
-            data.observed_bboxes[:occlusion_point, :] = 0
-            data.observed_temporal_mask[:occlusion_point] = True
+            data.observed.mask[:occlusion_point] = True
 
         return data
 
@@ -79,11 +77,11 @@ class IdentitySwitchAugmentation(Augmentation):
         self._switch_ratio = switch_ratio
 
     def apply(self, data: VideoClipData) -> VideoClipData:
-        n_tracks, clip_length = data.observed_temporal_mask.shape
+        n_tracks, clip_length = data.observed.mask.shape
 
         for t in range(0, clip_length):
             switch_proba = torch.ones((n_tracks,), dtype=torch.float) * self._switch_ratio
-            switch_proba = (1 - data.observed_temporal_mask.all(dim=-1).float()) * switch_proba
+            switch_proba = (1 - data.observed.mask.all(dim=-1).float()) * switch_proba
             switch_map = torch.bernoulli(switch_proba)
             switch_indices = torch.nonzero(switch_map)  # objects to switch
             switch_indices = switch_indices.reshape((switch_indices.shape[0],))
@@ -96,8 +94,9 @@ class IdentitySwitchAugmentation(Augmentation):
             if len(switch_indices) > 1:
                 # Switch the trajectory features, boxes and masks:
                 shuffle_switch_indices = switch_indices[torch.randperm(len(switch_indices))]
-                data.observed_bboxes[switch_indices, t, :] = data.observed_bboxes[shuffle_switch_indices, t, :]
-                data.observed_temporal_mask[switch_indices, t] = data.observed_temporal_mask[shuffle_switch_indices, t]
+                for feature_key in data.observed.features:
+                    data.observed.features[feature_key][switch_indices, t, :] = data.observed.features[feature_key][shuffle_switch_indices, t, :]
+                data.observed.mask[switch_indices, t] = data.observed.mask[shuffle_switch_indices, t]
             else:
                 continue  # no object to switch
 
@@ -119,12 +118,13 @@ class SmartIdentitySwitchAugmentation(Augmentation):
         self._max_switch_ratio = max_switch_ratio
 
     def apply(self, data: VideoClipData) -> VideoClipData:
-        n_tracks, _ = data.observed_temporal_mask.shape
+        n_tracks, _ = data.observed.mask.shape
 
         candidate_matrix, candidate_pair_matrix = self._compute_switch_candidates(data)
 
         switch_pairs = torch.nonzero(candidate_pair_matrix)
         switch_pairs = switch_pairs[torch.randperm(len(switch_pairs))]
+        switch_pairs = [(a, b) for a, b in switch_pairs if a < b]  # Remove duplicates
         max_switches = int(self._max_switch_ratio * n_tracks)
         switch_pairs = switch_pairs[:max_switches]
 
@@ -133,7 +133,7 @@ class SmartIdentitySwitchAugmentation(Augmentation):
                 continue
 
             switchable_timesteps = self._get_switchable_timesteps(
-                data.observed_temporal_mask, idx_a, idx_b, candidate_matrix[idx_a, idx_b]
+                data.observed.mask, idx_a, idx_b, candidate_matrix[idx_a, idx_b]
             )
 
             if len(switchable_timesteps) == 0:
@@ -147,14 +147,15 @@ class SmartIdentitySwitchAugmentation(Augmentation):
         return data
 
     def _compute_switch_candidates(self, data: VideoClipData) -> Tuple[torch.Tensor, torch.Tensor]:
-        n_tracks, clip_length = data.observed_temporal_mask.shape
+        assert 'bbox' in data.observed.features, f'Failed to find "bbox" features. Got {list(data.observed.features.keys())}'
+        n_tracks, clip_length = data.observed.mask.shape
         candidate_points_matrix = torch.zeros((n_tracks, n_tracks, clip_length), dtype=torch.bool)
 
         for i in range(n_tracks):
             for j in range(i + 1, n_tracks):
                 ious = self._calculate_iou_trajectory(
-                    data.observed_bboxes[i], data.observed_bboxes[j],
-                    data.observed_temporal_mask[i], data.observed_temporal_mask[j]
+                    data.observed.features['bbox'][i], data.observed.features['bbox'][j],
+                    data.observed.mask[i], data.observed.mask[j]
                 )
                 candidate_points_matrix[i, j] = ious >= self._iou_threshold
                 candidate_points_matrix[j, i] = candidate_points_matrix[i, j]
@@ -206,24 +207,25 @@ class SmartIdentitySwitchAugmentation(Augmentation):
 
     @staticmethod
     def _switch(data, idx_a, idx_b, start_time):
-        _, clip_length = data.observed_temporal_mask.shape
+        _, clip_length = data.observed.mask.shape
         switch_max_len = clip_length - start_time - 1
         assert switch_max_len >= 0
         if switch_max_len == 0:
             return
         swap_index = start_time + random.randint(1, switch_max_len)
 
-        data.observed_bboxes[[idx_a, idx_b], swap_index] = data.observed_bboxes[[idx_b, idx_a], swap_index]
-        data.observed_temporal_mask[[idx_a, idx_b], swap_index] = data.observed_temporal_mask[[idx_b, idx_a], swap_index]
+        for feature_key in data.observed.features:
+            data.observed.features[feature_key][[idx_a, idx_b], swap_index] = data.observed.features[feature_key][[idx_b, idx_a], swap_index]
+            data.observed.mask[[idx_a, idx_b], swap_index] = data.observed.mask[[idx_b, idx_a], swap_index]
 
 
 def test_identity_switch_augmentation():
     augmentation = SmartIdentitySwitchAugmentation(switch_ratio=1.0, iou_threshold=0.1)
 
     observed_bboxes = torch.tensor([
-        [[0, 0, 2, 2], [0, 0, 2, 2], [0, 0, 2, 2]],
-        [[1, 1, 2, 2], [1, 1, 2, 2], [0, 0, 0, 0]],
-        [[4, 4, 5, 5], [4, 4, 5, 5], [4, 4, 5, 5]]
+        [[0, 0, 2, 2, 1.0], [0, 0, 2, 2, 1.0], [0, 0, 2, 2, 0.9]],
+        [[1, 1, 2, 2, 0.9], [1, 1, 2, 2, 1.0], [0, 0, 0, 0, 1.0]],
+        [[4, 4, 5, 5, 1.0], [4, 4, 5, 5, 0.9], [4, 4, 5, 5, 1.0]]
     ], dtype=torch.float)
 
     observed_temporal_mask = torch.tensor([
@@ -233,18 +235,26 @@ def test_identity_switch_augmentation():
     ])
 
     data = VideoClipData(
-        observed_bboxes=observed_bboxes,
-        observed_temporal_mask=observed_temporal_mask,
-        observed_ts=None,
-        unobserved_bboxes=None,
-        unobserved_ts=None,
-        unobserved_temporal_mask=None
+        observed=VideoClipPart(
+            ids=None,
+            ts=None,
+            mask=observed_temporal_mask,
+            features={
+                'bbox': observed_bboxes
+            }
+        ),
+        unobserved=VideoClipPart(
+            ids=None,
+            ts=None,
+            mask=None,
+            features=None
+        )
     )
 
     augmented_data = augmentation.apply(data)
 
-    print("Original BBoxes:", data.observed_bboxes)
-    print("Augmented BBoxes:", augmented_data.observed_bboxes)
+    print("Original BBoxes:", data.observed.features['bbox'])
+    print("Augmented BBoxes:", augmented_data.observed.features['bbox'])
 
 
 if __name__ == '__main__':
