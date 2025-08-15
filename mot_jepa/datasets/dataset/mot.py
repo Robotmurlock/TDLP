@@ -91,7 +91,7 @@ class MOTClipDataset(Dataset):
             self._feature_extractor = GTBBoxFeatureExtractor(
                 index=index,
                 object_id_mapping=self._id_lookup,
-                n_track=n_tracks
+                n_tracks=n_tracks
             )
         else:
             self._feature_extractor = feature_extractor_factory(

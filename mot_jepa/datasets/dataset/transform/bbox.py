@@ -22,7 +22,7 @@ class BBoxStandardization(Transform):
         coord_mean: List[float],
         coord_std: List[float]
     ):
-        super().__init__(name='bbox_fod_standardization')
+        super().__init__(name='bbox_standardization')
 
         # Validation
         assert len(coord_mean) == 5
@@ -81,9 +81,14 @@ class BBoxFODStandardization(Transform):
                 fod[n][~mask[n]] = bboxes_n
         else:
             fod = torch.zeros_like(bboxes)
-            fod[:, 1:, :] = (bboxes[:, 1:, :] - bboxes[:, :-1, :] - self._fod_mean) / self._fod_std
+            fod[:, 1:, :] = bboxes[:, 1:, :] - bboxes[:, :-1, :]
 
-        data.observed.features['bbox'] = (data.observed.features['bbox'] - self._coord_mean) / self._coord_std  # Centralize
+        # FoD standardization
+        fod = (fod - self._fod_mean) / self._fod_std
+        extended_mask = mask[:, :-1].unsqueeze(-1).repeat(1, 1, bboxes.shape[-1]).float()
+        fod[:, 1:, :] = fod[:, 1:, :] * (1 - extended_mask)
+
+        bboxes = (bboxes - self._coord_mean) / self._coord_std  # Centralize
         data.observed.features['bbox'] = torch.cat([bboxes, fod], dim=-1)  # Add FOD
         data.observed.features['bbox'][data.observed.mask] = 0  # Cleanup
 

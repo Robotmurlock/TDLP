@@ -7,6 +7,5 @@ defaults:
   - model_config: with_interaction_encoder.yaml
   - path: default.yaml
 
-# experiment_name: exp20-fromExp19-FodTimeScaledTransform
-experiment_name: NewCodeTest-NoAugmentation
+experiment_name: exp20-fromExp19-FodTimeScaledTransform-NewCode
 dataset_name: DanceTrack
