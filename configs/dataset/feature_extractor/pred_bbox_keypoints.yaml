@@ -4,3 +4,4 @@ extractor_params:
   extra_false_positives: true
   feature_names:
     - bbox
+    - keypoints

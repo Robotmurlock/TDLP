@@ -81,7 +81,7 @@ class DatasetConfig:
             transform=self.build_transform(disable_transform=disable_transform),
             augmentations=self.build_augmentations(disable_augmentations=disable_augmentations),
             feature_extractor_type=self.feature_extractor.extractor_type if self.feature_extractor is not None else None,
-            feature_extractor_params = self.feature_extractor.extractor_params if self.feature_extractor is not None else None
+            feature_extractor_params=self.feature_extractor.extractor_params if self.feature_extractor is not None else None
         )
 
 

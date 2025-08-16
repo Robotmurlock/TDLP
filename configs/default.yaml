@@ -4,8 +4,8 @@ defaults:
   - dataset: dancetrack.yaml
   - train: default.yaml
   - eval: default.yaml
-  - model_config: with_interaction_encoder.yaml
+  - model_config: mm_bboxes_keypoints.yaml
   - path: default.yaml
 
-experiment_name: exp20-fromExp19-FodTimeScaledTransform-NewCode
+experiment_name: exp27-fromExp26-LinearSumAggregator
 dataset_name: DanceTrack

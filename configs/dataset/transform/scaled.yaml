@@ -2,9 +2,13 @@ _target_: mot_jepa.datasets.dataset.transform.ComposeTransform
 transforms:
   - _target_: mot_jepa.datasets.dataset.transform.BBoxXYWHtoXYXY
   - _target_: mot_jepa.datasets.dataset.transform.BBoxMinMaxScaling
-  - _target_: mot_jepa.datasets.dataset.transform.BBoxFODStandardization
-    coord_mean: [0.5, 0.5, 0.5, 0.5, 0.5]
-    coord_std: [0.1, 0.1, 0.1, 0.1, 1.0]
-    fod_mean: [0.0, 0.0, 0.0, 0.0, 0.0]
-    fod_std: [0.05, 0.05, 0.05, 0.05, 1.0]
+  - _target_: mot_jepa.datasets.dataset.transform.FeatureFODStandardization
+    coord_mean:
+      bbox: [0.5, 0.5, 0.5, 0.5, 0.5]
+    coord_std:
+      bbox: [0.1, 0.1, 0.1, 0.1, 1.0]
+    fod_mean:
+      bbox: [0.0, 0.0, 0.0, 0.0, 0.0]
+    fod_std:
+      bbox: [0.05, 0.05, 0.05, 0.05, 1.0]
     fod_time_scaled: true

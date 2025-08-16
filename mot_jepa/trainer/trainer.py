@@ -237,13 +237,13 @@ class ContrastiveTrainer:
             data = torch_helper.to_device(data, device=self._device)
 
             # Extract data
-            track_bboxes = data['observed']['features']['bbox']
+            track_features = data['observed']['features']
             track_mask = data['observed']['mask']
-            det_bboxes = data['unobserved']['features']['bbox']
+            det_features = data['unobserved']['features']
             det_mask = data['unobserved']['mask']
 
             self._optimizer.zero_grad()
-            track_features, det_features = self._model(track_bboxes, track_mask, det_bboxes, det_mask)
+            track_features, det_features, _, _ = self._model(track_features, track_mask, det_features, det_mask)
             loss_dict = self._loss_func(track_features, det_features, track_mask, det_mask)
             loss_dict['loss'].backward()
             if self._gradient_clip is not None:
@@ -293,12 +293,12 @@ class ContrastiveTrainer:
             data = torch_helper.to_device(data, device=self._device)
 
             # Extract data
-            track_bboxes = data['observed']['features']['bbox']
+            track_features = data['observed']['features']
             track_mask = data['observed']['mask']
-            det_bboxes = data['unobserved']['features']['bbox']
+            det_features = data['unobserved']['features']
             det_mask = data['unobserved']['mask']
 
-            track_features, det_features = self._model(track_bboxes, track_mask, det_bboxes, det_mask)
+            track_features, det_features, _, _ = self._model(track_features, track_mask, det_features, det_mask)
             loss_dict = self._loss_func(track_features, det_features, track_mask, det_mask)
 
             track_accuracy_meter.push(loss_dict['track_predictions'], loss_dict['track_labels'], mask=loss_dict['track_mask'])

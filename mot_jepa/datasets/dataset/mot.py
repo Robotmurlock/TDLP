@@ -19,7 +19,7 @@ from torch.utils.data import Dataset
 
 from mot_jepa.datasets.dataset.augmentations import Augmentation
 from mot_jepa.datasets.dataset.common.data import VideoClipData
-from mot_jepa.datasets.dataset.feature_extractor import GTBBoxFeatureExtractor, feature_extractor_factory
+from mot_jepa.datasets.dataset.feature_extractor import GTBBoxFeatureExtractor, feature_extractor_factory, FeatureExtractor
 from mot_jepa.datasets.dataset.index.index import DatasetIndex
 from mot_jepa.datasets.dataset.transform import Transform
 
@@ -110,6 +110,13 @@ class MOTClipDataset(Dataset):
         Returns: Dataset index
         """
         return self._index
+
+    @property
+    def feature_extractor(self) -> FeatureExtractor:
+        """
+        Returns: Feature extractor
+        """
+        return self._feature_extractor
 
     @staticmethod
     def _create_clip_index(

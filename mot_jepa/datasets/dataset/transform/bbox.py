@@ -1,9 +1,10 @@
-from typing import List
+from typing import List, Dict
 
 import torch
 
 from mot_jepa.datasets.dataset.common.data import VideoClipData, VideoClipPart
 from mot_jepa.datasets.dataset.transform.base import Transform
+from mot_jepa.datasets.dataset.transform.utils import expand_pattern
 
 
 class BBoxXYWHtoXYXY(Transform):
@@ -19,81 +20,82 @@ class BBoxXYWHtoXYXY(Transform):
 class BBoxStandardization(Transform):
     def __init__(
         self,
-        coord_mean: List[float],
-        coord_std: List[float]
+        coord_mean: Dict[str, List[float]],
+        coord_std: Dict[str, List[float]],
     ):
-        super().__init__(name='bbox_standardization')
+        super().__init__(name='feature_standardization')
 
-        # Validation
-        assert len(coord_mean) == 5
-        assert len(coord_std) == 5
+        assert set(coord_mean.keys()) == set(coord_std.keys())
 
-        self._coord_mean = torch.tensor(coord_mean, dtype=torch.float32)
-        self._coord_std = torch.tensor(coord_std, dtype=torch.float32)
+        self._feature_names = list(coord_mean.keys())
+        self._coord_mean = {k: torch.tensor(expand_pattern(v), dtype=torch.float32) for k, v in coord_mean.items()}
+        self._coord_std = {k: torch.tensor(expand_pattern(v), dtype=torch.float32) for k, v in coord_std.items()}
 
     def apply(self, data: VideoClipData) -> VideoClipData:
-        data.observed.features['bbox'] = (data.observed.features['bbox'] - self._coord_mean) / self._coord_std  # Centralize
-        data.unobserved.features['bbox'] = (data.unobserved.features['bbox'] - self._coord_mean) / self._coord_std  # Centralize
-        data.observed.features['bbox'][data.observed.mask] = 0
-        data.unobserved.features['bbox'][data.unobserved.mask] = 0
+        for feature_name in self._feature_names:
+            data.observed.features[feature_name] = \
+                (data.observed.features[feature_name] - self._coord_mean[feature_name]) / self._coord_std[feature_name]  # Centralize
+            data.unobserved.features[feature_name] = \
+                (data.unobserved.features[feature_name] - self._coord_mean[feature_name]) / self._coord_std[feature_name]  # Centralize
+            data.observed.features[feature_name][data.observed.mask] = 0
+            data.unobserved.features[feature_name][data.unobserved.mask] = 0
 
         return data
 
 
-class BBoxFODStandardization(Transform):
+class FeatureFODStandardization(Transform):
     def __init__(
         self,
-        coord_mean: List[float],
-        coord_std: List[float],
-        fod_mean: List[float],
-        fod_std: List[float],
+        coord_mean: Dict[str, List[float]],
+        coord_std: Dict[str, List[float]],
+        fod_mean: Dict[str, List[float]],
+        fod_std: Dict[str, List[float]],
         fod_time_scaled: bool = False
     ):
-        super().__init__(name='bbox_fod_standardization')
+        super().__init__(name='feature_fod_standardization')
 
-        # Validation
-        assert len(coord_mean) == 5
-        assert len(coord_std) == 5
-        assert len(fod_mean) == 5
-        assert len(fod_std) == 5
+        assert set(coord_mean.keys()) == set(coord_std.keys()) == set(fod_mean.keys()) == set(fod_std.keys())
 
-        self._coord_mean = torch.tensor(coord_mean, dtype=torch.float32)
-        self._coord_std = torch.tensor(coord_std, dtype=torch.float32)
-        self._fod_mean = torch.tensor(fod_mean, dtype=torch.float32)
-        self._fod_std = torch.tensor(fod_std, dtype=torch.float32)
+        self._feature_names = list(coord_mean.keys())
+        self._coord_mean = {k: torch.tensor(expand_pattern(v), dtype=torch.float32) for k, v in coord_mean.items()}
+        self._coord_std = {k: torch.tensor(expand_pattern(v), dtype=torch.float32) for k, v in coord_std.items()}
+        self._fod_mean = {k: torch.tensor(expand_pattern(v), dtype=torch.float32) for k, v in fod_mean.items()}
+        self._fod_std = {k: torch.tensor(expand_pattern(v), dtype=torch.float32) for k, v in fod_std.items()}
         self._fod_time_scaled = fod_time_scaled
 
     def apply(self, data: VideoClipData) -> VideoClipData:
-        bboxes = data.observed.features['bbox']
-        mask = data.observed.mask
+        for feature_name in self._feature_names:
+            features = data.observed.features[feature_name]
+            mask = data.observed.mask
 
-        if self._fod_time_scaled:
-            fod = torch.zeros_like(bboxes)
-            ts = data.observed.ts.unsqueeze(-1).repeat(1, 1, bboxes.shape[-1])
-            for n in range(bboxes.shape[0]):
-                ts_n = ts[n][~mask[n]]
-                bboxes_n = bboxes[n][~mask[n]]
-                if bboxes_n.shape[0] == 0:
-                    continue
+            if self._fod_time_scaled:
+                fod = torch.zeros_like(features)
+                ts = data.observed.ts.unsqueeze(-1).repeat(1, 1, features.shape[-1])
+                for n in range(features.shape[0]):
+                    ts_n = ts[n][~mask[n]]
+                    features_n = features[n][~mask[n]]
+                    if features_n.shape[0] == 0:
+                        continue
 
-                bboxes_n[1:, :] = (bboxes_n[1:, :] - bboxes_n[:-1, :]) / (ts_n[1:, :] - ts_n[:-1, :])
-                bboxes_n[0, :] = 0
-                fod[n][~mask[n]] = bboxes_n
-        else:
-            fod = torch.zeros_like(bboxes)
-            fod[:, 1:, :] = bboxes[:, 1:, :] - bboxes[:, :-1, :]
+                    features_n[1:, :] = (features_n[1:, :] - features_n[:-1, :]) / (ts_n[1:, :] - ts_n[:-1, :])
+                    features_n[0, :] = 0
+                    fod[n][~mask[n]] = features_n
+            else:
+                fod = torch.zeros_like(features)
+                fod[:, 1:, :] = features[:, 1:, :] - features[:, :-1, :]
 
-        # FoD standardization
-        fod = (fod - self._fod_mean) / self._fod_std
-        extended_mask = mask[:, :-1].unsqueeze(-1).repeat(1, 1, bboxes.shape[-1]).float()
-        fod[:, 1:, :] = fod[:, 1:, :] * (1 - extended_mask)
+            # FoD standardization
+            fod = (fod - self._fod_mean[feature_name]) / self._fod_std[feature_name]
+            extended_mask = mask[:, :-1].unsqueeze(-1).repeat(1, 1, features.shape[-1]).float()
+            fod[:, 1:, :] = fod[:, 1:, :] * (1 - extended_mask)
 
-        bboxes = (bboxes - self._coord_mean) / self._coord_std  # Centralize
-        data.observed.features['bbox'] = torch.cat([bboxes, fod], dim=-1)  # Add FOD
-        data.observed.features['bbox'][data.observed.mask] = 0  # Cleanup
+            features = (features - self._coord_mean[feature_name]) / self._coord_std[feature_name]  # Centralize
+            data.observed.features[feature_name] = torch.cat([features, fod], dim=-1)  # Add FOD
+            data.observed.features[feature_name][data.observed.mask] = 0  # Cleanup
 
-        data.unobserved.features['bbox'] = (data.unobserved.features['bbox'] - self._coord_mean) / self._coord_std  # Centralize
-        data.unobserved.features['bbox'][data.unobserved.mask] = 0  # Cleanup
+            data.unobserved.features[feature_name] = \
+                (data.unobserved.features[feature_name] - self._coord_mean[feature_name]) / self._coord_std[feature_name]  # Centralize
+            data.unobserved.features[feature_name][data.unobserved.mask] = 0  # Cleanup
 
         return data
 
@@ -132,6 +134,10 @@ class BBoxMinMaxScaling(Transform):
         # Zero-out masked entries
         data.observed.features['bbox'][data.observed.mask] = 0
         data.unobserved.features['bbox'][data.unobserved.mask] = 0
+
+        if 'keypoints' in data.observed.features:
+            data.observed.features['keypoints'][:, :, :2] = (data.observed.features['keypoints'][:, :, :2] - min_val) / scale
+            data.unobserved.features['keypoints'][:, :2] = (data.unobserved.features['keypoints'][:, :2] - min_val) / scale
 
         return data
 
