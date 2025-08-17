@@ -11,7 +11,7 @@ from mot_jepa.utils.extra_features import ExtraFeaturesReader
 
 class PredictionBBoxFeatureExtractor(FeatureExtractor):
     BBOX_DIM = 5  # XYWHC
-    KEYPOINTS_DIM = 52  # 17x3 XYC (per part) + 1 C (global) = 52
+    KEYPOINTS_DIM = 35  # 17x2 XYC (per part) + 1 C (global) = 52
     APPEARANCE_DIM = 768  # 6x128
     SUPPORTED_FEATURES = {'bbox', 'keypoints', 'appearance'}
 
@@ -69,7 +69,7 @@ class PredictionBBoxFeatureExtractor(FeatureExtractor):
             bbox = [*data['bbox_xywh'], data['bbox_conf']]
             features['bbox'][object_index, clip_index, :] = torch.tensor(bbox, dtype=torch.float32)
         if 'keypoints' in feature_names:
-            keypoints = sum(data['keypoints_xyc'], []) + [data['keypoints_conf']]
+            keypoints = sum([d[:2] for d in data['keypoints_xyc']], []) + [data['keypoints_conf']]
             features['keypoints'][object_index, clip_index, :] = torch.tensor(keypoints, dtype=torch.float32)
         if 'appearance' in feature_names:
             appearance = sum(data['appearance_embeddings'], [])

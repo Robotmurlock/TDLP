@@ -7,5 +7,5 @@ defaults:
   - model_config: mm_bboxes_keypoints.yaml
   - path: default.yaml
 
-experiment_name: exp27-fromExp26-LinearSumAggregator
+experiment_name: exp28-fromExp26-IgnorePerKeypointConfidence
 dataset_name: DanceTrack
