@@ -1,6 +1,4 @@
-"""
-Set of path constants relative to project source (independent of project location on system).
-"""
+"""Project-relative paths for source code, configs and outputs."""
 import os
 
 
