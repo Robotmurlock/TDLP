@@ -1,3 +1,5 @@
+"""Transformer-based encoder modeling interactions between tracks and detections."""
+
 from typing import Tuple
 
 import einops
@@ -6,14 +8,24 @@ from torch import nn
 
 
 class ObjectInteractionEncoder(nn.Module):
+    """Encode joint track and detection features with self-attention."""
+
     def __init__(
         self,
         hidden_dim: int,
         n_heads: int,
         n_layers: int,
         ffn_dim: int = 256,
-        dropout: float = 0.1
-    ):
+        dropout: float = 0.1,
+    ) -> None:
+        """Args:
+            hidden_dim: Size of the feature embeddings.
+            n_heads: Number of attention heads.
+            n_layers: Number of transformer encoder layers.
+            ffn_dim: Hidden dimension of the feed-forward network.
+            dropout: Dropout rate applied inside transformer layers.
+        """
+
         super().__init__()
         self._hidden_dim = hidden_dim
         encoder_layer = nn.TransformerEncoderLayer(
@@ -22,16 +34,33 @@ class ObjectInteractionEncoder(nn.Module):
             dim_feedforward=ffn_dim,
             dropout=dropout,
             activation=nn.SiLU(),
-            batch_first=False
+            batch_first=False,
         )
         self._encoder = nn.TransformerEncoder(
             encoder_layer=encoder_layer,
-            num_layers=n_layers
+            num_layers=n_layers,
         )
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, hidden_dim))
 
-    def forward(self, track_x: torch.Tensor, track_mask: torch.Tensor, det_x: torch.Tensor, det_mask: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self,
+        track_x: torch.Tensor,
+        track_mask: torch.Tensor,
+        det_x: torch.Tensor,
+        det_mask: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Args:
+            track_x: Track feature tensor of shape ``(B, N, E)``.
+            track_mask: Boolean mask for ``track_x``.
+            det_x: Detection feature tensor of shape ``(B, M, E)``.
+            det_mask: Boolean mask for ``det_x``.
+
+        Returns:
+            Tuple ``(track_features, detection_features)`` with updated
+            representations after self-attention.
+        """
+
         N = track_x.shape[1]
 
         x = torch.cat([track_x, det_x], dim=1)

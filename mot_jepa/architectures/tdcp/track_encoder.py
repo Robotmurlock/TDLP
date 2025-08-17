@@ -1,5 +1,6 @@
-import math
+"""Track encoder components used in TDCP architectures."""
 
+import math
 import einops
 import torch
 from torch import nn
@@ -46,14 +47,24 @@ class ReversedPositionalEncoding(nn.Module):
 
 
 class TrackEncoder(nn.Module):
+    """Temporal encoder that processes per-track sequences."""
+
     def __init__(
         self,
         hidden_dim: int,
         n_heads: int,
         n_layers: int,
         ffn_dim: int = 256,
-        dropout: float = 0.1
-    ):
+        dropout: float = 0.1,
+    ) -> None:
+        """Args:
+            hidden_dim: Feature dimension for each object.
+            n_heads: Number of attention heads.
+            n_layers: Number of transformer encoder layers.
+            ffn_dim: Hidden size of the feed-forward networks.
+            dropout: Dropout rate used throughout the encoder.
+        """
+
         super().__init__()
         self._hidden_dim = hidden_dim
         self._pos_encoder = ReversedPositionalEncoding(hidden_dim)
@@ -63,16 +74,27 @@ class TrackEncoder(nn.Module):
             dim_feedforward=ffn_dim,
             dropout=dropout,
             activation=nn.SiLU(),
-            batch_first=False
+            batch_first=False,
         )
         self._encoder = nn.TransformerEncoder(
             encoder_layer=encoder_layer,
-            num_layers=n_layers
+            num_layers=n_layers,
         )
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, hidden_dim))
 
     def forward(self, x: torch.Tensor, masks: torch.Tensor) -> torch.Tensor:
+        """Args:
+            x: Input tensor of shape ``(B, N, T, D)`` where ``B`` is batch size,
+                ``N`` number of tracks, ``T`` temporal length and ``D`` feature
+                dimension.
+            masks: Boolean mask tensor of shape ``(B, N, T)`` marking padded
+                timesteps.
+
+        Returns:
+            Tensor of shape ``(B, N, D)`` representing encoded tracks.
+        """
+
         B, N, T, D = x.shape  # batch, objects, temporal, dim
 
         # Tokenize

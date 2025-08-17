@@ -1,14 +1,24 @@
+"""Feed-forward encoder for detection features."""
+
 import torch
 from torch import nn
 
 
 class DetectionEncoder(nn.Module):
+    """Two-layer feed-forward network with normalization and dropout."""
+
     def __init__(
         self,
         input_dim: int,
         hidden_dim: int,
         dropout: float = 0.1,
-    ):
+    ) -> None:
+        """Args:
+            input_dim: Dimensionality of the input detections.
+            hidden_dim: Size of the latent representation.
+            dropout: Dropout rate applied between layers.
+        """
+
         super().__init__()
         self.encoder = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
@@ -19,6 +29,13 @@ class DetectionEncoder(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Args:
+            x: Input tensor of detection features.
+
+        Returns:
+            Encoded detection features with shape ``(..., hidden_dim)``.
+        """
+
         return self.encoder(x)
 
 
