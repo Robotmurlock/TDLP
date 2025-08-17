@@ -5,8 +5,9 @@ loss_config:
   _target_: mot_jepa.trainer.losses.infonce.BatchLevelInfoNCE
 
 optimizer_config:
-  _target_: torch.optim.Adam
+  _target_: torch.optim.AdamW
   lr: 1e-4
+  weight_decay: 1e-4
 
 scheduler_config:
   _target_: mot_jepa.trainer.scheduler.create_warmup_cosine_annealing_scheduler
