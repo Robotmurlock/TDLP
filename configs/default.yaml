@@ -7,5 +7,5 @@ defaults:
   - model_config: mm_bboxes_keypoints.yaml
   - path: default.yaml
 
-experiment_name: exp30-fromExp29-WeightDecay
+experiment_name: exp31-fromExp29-AttnQueryAggregator
 dataset_name: DanceTrack

@@ -2,6 +2,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Sequence, Dict, Any
 
+import einops
 import torch
 from torch import Tensor, nn
 
@@ -94,11 +95,13 @@ class TDCPQueryAttentionPool(TDCPAggregator):
         self.out_norm = nn.LayerNorm(hidden_dim)
 
     def forward(self, features: Sequence[Tensor]) -> Tensor:
-        x = torch.stack(features, dim=1)  # [B, M, D]
-        B = x.size(0)
-        q = self.q.expand(B, -1, -1)     # [B, 1, D]
-        pooled, _ = self.attn(q, x, x)   # [B, 1, D]
-        return self.out_norm(pooled[:, 0, :])  # [B, D]
+        x = torch.stack(features, dim=2)  # [B, N, M, E]
+        B, N, M, _ = x.shape
+        x = einops.rearrange(x, 'b n m e -> (b n) m e')
+        q = self.q.expand(B * N, -1, -1)     # [B, 1, E]
+        pooled, _ = self.attn(q, x, x)   # [B, 1, E]
+        pooled = self.out_norm(pooled[:, 0, :])  # [B, E]
+        return einops.rearrange(pooled, '(b n) e -> b n e', b=B, n=N)
 
 
 TDCP_AGGREGATOR_CATALOG = {
