@@ -1,6 +1,7 @@
 defaults:
-  - transform: scaled.yaml
+  - transform: scaled_bbox_keypoints.yaml
   - augmentations: default.yaml
+  - feature_extractor: pred_bbox_keypoints.yaml
 
 index:
   type: mot
@@ -13,4 +14,3 @@ clip_length: 30
 min_clip_tracks: 1
 clip_sampling_step: 1
 val_clip_sampling_step: 1
-extra_features_path: /media/home/cameltrack-states/extracted-features

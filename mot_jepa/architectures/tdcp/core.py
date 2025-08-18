@@ -1,15 +1,17 @@
 """Core TDCP model combining track and detection encoders."""
 
 import copy
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Dict, Any, Set
 
 import torch
 from torch import nn
 
+from mot_jepa.architectures.tdcp import utils as tdcp_utils
+from mot_jepa.architectures.tdcp.aggregators import tdcp_aggregator_factory, TDCPAggregator
 from mot_jepa.architectures.tdcp.detection_encoder import DetectionEncoder
+from mot_jepa.architectures.tdcp.object_interaction_encoder import ObjectInteractionEncoder
 from mot_jepa.architectures.tdcp.projector import TrackToDetectionProjector
 from mot_jepa.architectures.tdcp.track_encoder import TrackEncoder
-from mot_jepa.architectures.tdcp.object_interaction_encoder import ObjectInteractionEncoder
 
 
 class TrackDetectionContrastivePrediction(nn.Module):
@@ -21,6 +23,7 @@ class TrackDetectionContrastivePrediction(nn.Module):
         track_encoder: TrackEncoder,
         projector: TrackToDetectionProjector,
         object_interaction_encoder: Optional[ObjectInteractionEncoder] = None,
+        enable_motion_encoder: bool = True
     ) -> None:
         """Args:
             detection_encoder: Encoder applied to raw detections.
@@ -28,11 +31,11 @@ class TrackDetectionContrastivePrediction(nn.Module):
             projector: Projects track embeddings to detection space.
             object_interaction_encoder: Optional module modeling interactions
                 between tracks and detections.
+            enable_motion_encoder: Enable motion encoder (use if FoD is applied in the transform function)
         """
-
         super().__init__()
         self._static_encoder = detection_encoder
-        self._motion_encoder = copy.deepcopy(detection_encoder)
+        self._motion_encoder = copy.deepcopy(detection_encoder) if enable_motion_encoder else None
         self._track_encoder = track_encoder
         self._projector = projector
         self._object_interaction_encoder = object_interaction_encoder
@@ -56,10 +59,15 @@ class TrackDetectionContrastivePrediction(nn.Module):
         """
 
         det_features = self._static_encoder(det_x)
-        half_dim = track_x.shape[-1] // 2
-        track_static_x = self._static_encoder(track_x[..., :half_dim])
-        track_motion_x = track_static_x + self._motion_encoder(track_x[..., half_dim:])
-        track_features = self._track_encoder(track_motion_x, track_mask)
+
+        if self._motion_encoder is not None:
+            half_dim = track_x.shape[-1] // 2
+            track_static_x = self._static_encoder(track_x[..., :half_dim])
+            track_x = track_static_x + self._motion_encoder(track_x[..., half_dim:])
+        else:
+            track_x = self._static_encoder(track_x)
+
+        track_features = self._track_encoder(track_x, track_mask)
         projected_features = self._projector(track_features)
 
         if self._object_interaction_encoder is not None:
@@ -71,13 +79,51 @@ class TrackDetectionContrastivePrediction(nn.Module):
         return projected_features, det_features
 
 
-def build_track_detection_contrastive_prediction_model(
-    det_input_dim: int,
+class MultiModalTDCP(nn.Module):
+    def __init__(
+        self,
+        tdcps: Dict[str, TrackDetectionContrastivePrediction],
+        aggregator: TDCPAggregator
+    ):
+        super().__init__()
+        self._tdcps = nn.ModuleDict(tdcps)
+        self._aggregator = aggregator
+
+    @property
+    def feature_names(self) -> Set[str]:
+        return set(self._tdcps.keys())
+
+    def forward(
+        self,
+        track_features: Dict[str, torch.Tensor],
+        track_mask: torch.Tensor,
+        det_features: Dict[str, torch.Tensor],
+        det_mask: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
+        assert set(track_features.keys()) == set(det_features.keys()) == set(self._tdcps.keys())
+
+        for key in self._tdcps:
+            track_features[key], det_features[key] = self._tdcps[key](
+                track_x=track_features[key],
+                track_mask=track_mask,
+                det_x=det_features[key],
+                det_mask=det_mask
+            )
+
+        agg_track_features = self._aggregator(list(track_features.values()))
+        agg_det_features = self._aggregator(list(det_features.values()))
+
+        return agg_track_features, agg_det_features, track_features, det_features
+
+
+def build_tdcp_model(
+    input_dim: int,
     hidden_dim: int = 256,
     dropout: float = 0.1,
     track_encoder_n_heads: int = 8,
     track_encoder_n_layers: int = 6,
     track_encoder_ffn_dim: int = 512,
+    track_encoder_enable_motion_encoder: bool = True,
     projector_intermediate_dim: int = 512,
     interaction_encoder_enable: bool = False,
     interaction_encoder_n_heads: int = 8,
@@ -87,12 +133,13 @@ def build_track_detection_contrastive_prediction_model(
     """Build a complete TDCP model with default components.
 
     Args:
-        det_input_dim: Dimensionality of detection inputs.
+        input_dim: Dimensionality of inputs.
         hidden_dim: Shared embedding dimension across modules.
         dropout: Dropout rate used in all components.
         track_encoder_n_heads: Number of attention heads in the track encoder.
         track_encoder_n_layers: Number of transformer layers in the track encoder.
         track_encoder_ffn_dim: Feed-forward dimension in the track encoder.
+        track_encoder_enable_motion_encoder: Enable motion encoder (use if FoD is applied in the transform function)
         projector_intermediate_dim: Hidden dimension of the projector MLP.
         interaction_encoder_enable: Whether to include the interaction encoder.
         interaction_encoder_n_heads: Attention heads for the interaction encoder.
@@ -104,7 +151,7 @@ def build_track_detection_contrastive_prediction_model(
     """
 
     detection_encoder = DetectionEncoder(
-        input_dim=det_input_dim,
+        input_dim=input_dim,
         hidden_dim=hidden_dim,
         dropout=dropout,
     )
@@ -138,12 +185,35 @@ def build_track_detection_contrastive_prediction_model(
         track_encoder=track_encoder,
         projector=projector,
         object_interaction_encoder=object_interaction_encoder,
+        enable_motion_encoder=track_encoder_enable_motion_encoder
+    )
+
+
+def build_mm_tdcp_model(
+    per_feature_params: Dict[str, Any],
+    common_params: Dict[str, Any],
+    aggregator_type: str,
+    aggregator_params: Dict[str, Any]
+) -> MultiModalTDCP:
+    tdcps: Dict[str, TrackDetectionContrastivePrediction] = {}
+    for feature_name in per_feature_params:
+        params = tdcp_utils.merge_configs(common_params, per_feature_params[feature_name])
+        tdcps[feature_name] = build_tdcp_model(**params)
+
+    aggregator = tdcp_aggregator_factory(
+        aggregator_type=aggregator_type,
+        aggregator_params=aggregator_params,
+        n_features=len(per_feature_params)
+    )
+    return MultiModalTDCP(
+        tdcps=tdcps,
+        aggregator=aggregator
     )
 
 
 def run_test() -> None:
-    tdcp = build_track_detection_contrastive_prediction_model(
-        det_input_dim=4,
+    tdcp = build_tdcp_model(
+        input_dim=4,
         hidden_dim=4,
         track_encoder_n_heads=2,
         track_encoder_n_layers=1,

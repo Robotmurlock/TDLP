@@ -1,6 +1,6 @@
 """
 Config structure. Config should be loaded as dictionary and parsed into GlobalConfig Python object. Benefits:
-- Structure and type validation (using dacite library)
+- Structure and type validation (using the dacite library)
 - Custom validations
 - Python IDE autocomplete
 """
@@ -32,6 +32,12 @@ class DatasetIndexConfig:
 
 
 @dataclass
+class FeatureExtractorConfig:
+    extractor_type: str
+    extractor_params: dict
+
+
+@dataclass
 class DatasetConfig:
     index: DatasetIndexConfig
     n_tracks: int
@@ -39,8 +45,8 @@ class DatasetConfig:
     min_clip_tracks: int = 1
     clip_sampling_step: int = 1
     val_clip_sampling_step: Optional[int] = None
-    extra_features_path: Optional[str] = None
 
+    feature_extractor: Optional[FeatureExtractorConfig] = None
     transform: Optional[dict] = None
     augmentations: Optional[dict] = None
 
@@ -74,7 +80,8 @@ class DatasetConfig:
             clip_sampling_step=clip_sampling_step,
             transform=self.build_transform(disable_transform=disable_transform),
             augmentations=self.build_augmentations(disable_augmentations=disable_augmentations),
-            extra_features_path=self.extra_features_path if not test else None
+            feature_extractor_type=self.feature_extractor.extractor_type if self.feature_extractor is not None else None,
+            feature_extractor_params=self.feature_extractor.extractor_params if self.feature_extractor is not None else None
         )
 
 
@@ -186,7 +193,8 @@ class GlobalConfig:
 
 
 # Configuring hydra config store
-# If config has `- global_config` in defaults then
+# If config has `- the_global_config` in defaults, then
 # full config is recursively instantiated
 cs = ConfigStore.instance()
 cs.store(name='the_global_config', node=GlobalConfig)
+

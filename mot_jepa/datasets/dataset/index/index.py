@@ -172,7 +172,7 @@ class DatasetIndex(ABC):
             frame_index: Frame index
 
         Returns:
-            List of present objects in scene.
+            List of present objects in the scene.
         """
 
     def get_objects_present_in_scene_clip(
@@ -198,6 +198,20 @@ class DatasetIndex(ABC):
             all_object_ids.extend(object_ids)
 
         return sorted(list(set(all_object_ids)))
+
+    def get_objects_present_in_scene(self, scene_name: str) -> List[str]:
+        """
+        Get all objects present in the scene across the full video.
+        Special case for the `get_objects_present_in_scene_clip` function.
+
+        Args:
+            scene_name: Scene name
+
+        Returns:
+            List of present objects in scene/video.
+        """
+        scene_info = self.get_scene_info(scene_name)
+        return self.get_objects_present_in_scene_clip(scene_name, 0, scene_info.seqlength - 1)
 
     def get_max_tracks(self) -> int:
         """

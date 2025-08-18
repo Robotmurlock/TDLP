@@ -1,9 +1,10 @@
-from typing import List
+from typing import List, Dict
 
 import torch
 
-from mot_jepa.datasets.dataset.common.data import VideoClipData
+from mot_jepa.datasets.dataset.common.data import VideoClipData, VideoClipPart
 from mot_jepa.datasets.dataset.transform.base import Transform
+from mot_jepa.datasets.dataset.transform.utils import expand_pattern
 
 
 class BBoxXYWHtoXYXY(Transform):
@@ -11,84 +12,90 @@ class BBoxXYWHtoXYXY(Transform):
         super().__init__(name='bbox_xywh_to_xyxy')
 
     def apply(self, data: VideoClipData) -> VideoClipData:
-        data.observed_bboxes[..., 2:4] = data.observed_bboxes[..., :2] + data.observed_bboxes[..., 2:4]
-        data.unobserved_bboxes[..., 2:4] = data.unobserved_bboxes[..., :2] + data.unobserved_bboxes[..., 2:4]
+        data.observed.features['bbox'][..., 2:4] = data.observed.features['bbox'][..., :2] + data.observed.features['bbox'][..., 2:4]
+        data.unobserved.features['bbox'][..., 2:4] = data.unobserved.features['bbox'][..., :2] + data.unobserved.features['bbox'][..., 2:4]
         return data
 
 
 class BBoxStandardization(Transform):
     def __init__(
         self,
-        coord_mean: List[float],
-        coord_std: List[float]
+        coord_mean: Dict[str, List[float]],
+        coord_std: Dict[str, List[float]],
     ):
-        super().__init__(name='bbox_fod_standardization')
+        super().__init__(name='feature_standardization')
 
-        # Validation
-        assert len(coord_mean) == 5
-        assert len(coord_std) == 5
+        assert set(coord_mean.keys()) == set(coord_std.keys())
 
-        self._coord_mean = torch.tensor(coord_mean, dtype=torch.float32)
-        self._coord_std = torch.tensor(coord_std, dtype=torch.float32)
+        self._feature_names = list(coord_mean.keys())
+        self._coord_mean = {k: torch.tensor(expand_pattern(v), dtype=torch.float32) for k, v in coord_mean.items()}
+        self._coord_std = {k: torch.tensor(expand_pattern(v), dtype=torch.float32) for k, v in coord_std.items()}
 
     def apply(self, data: VideoClipData) -> VideoClipData:
-        data.observed_bboxes = (data.observed_bboxes - self._coord_mean) / self._coord_std  # Centralize
-        data.unobserved_bboxes = (data.unobserved_bboxes - self._coord_mean) / self._coord_std  # Centralize
-        data.observed_bboxes[data.observed_temporal_mask] = 0
-        data.unobserved_bboxes[data.unobserved_temporal_mask] = 0
+        for feature_name in self._feature_names:
+            data.observed.features[feature_name] = \
+                (data.observed.features[feature_name] - self._coord_mean[feature_name]) / self._coord_std[feature_name]  # Centralize
+            data.unobserved.features[feature_name] = \
+                (data.unobserved.features[feature_name] - self._coord_mean[feature_name]) / self._coord_std[feature_name]  # Centralize
+            data.observed.features[feature_name][data.observed.mask] = 0
+            data.unobserved.features[feature_name][data.unobserved.mask] = 0
 
         return data
 
 
-class BBoxFODStandardization(Transform):
+class FeatureFODStandardization(Transform):
     def __init__(
         self,
-        coord_mean: List[float],
-        coord_std: List[float],
-        fod_mean: List[float],
-        fod_std: List[float],
+        coord_mean: Dict[str, List[float]],
+        coord_std: Dict[str, List[float]],
+        fod_mean: Dict[str, List[float]],
+        fod_std: Dict[str, List[float]],
         fod_time_scaled: bool = False
     ):
-        super().__init__(name='bbox_fod_standardization')
+        super().__init__(name='feature_fod_standardization')
 
-        # Validation
-        assert len(coord_mean) == 5
-        assert len(coord_std) == 5
-        assert len(fod_mean) == 5
-        assert len(fod_std) == 5
+        assert set(coord_mean.keys()) == set(coord_std.keys()) == set(fod_mean.keys()) == set(fod_std.keys())
 
-        self._coord_mean = torch.tensor(coord_mean, dtype=torch.float32)
-        self._coord_std = torch.tensor(coord_std, dtype=torch.float32)
-        self._fod_mean = torch.tensor(fod_mean, dtype=torch.float32)
-        self._fod_std = torch.tensor(fod_std, dtype=torch.float32)
+        self._feature_names = list(coord_mean.keys())
+        self._coord_mean = {k: torch.tensor(expand_pattern(v), dtype=torch.float32) for k, v in coord_mean.items()}
+        self._coord_std = {k: torch.tensor(expand_pattern(v), dtype=torch.float32) for k, v in coord_std.items()}
+        self._fod_mean = {k: torch.tensor(expand_pattern(v), dtype=torch.float32) for k, v in fod_mean.items()}
+        self._fod_std = {k: torch.tensor(expand_pattern(v), dtype=torch.float32) for k, v in fod_std.items()}
         self._fod_time_scaled = fod_time_scaled
 
     def apply(self, data: VideoClipData) -> VideoClipData:
-        if self._fod_time_scaled:
-            bboxes = data.observed_bboxes
-            mask = data.observed_temporal_mask
-            fod = torch.zeros_like(bboxes)
-            ts = data.observed_ts.unsqueeze(-1).repeat(1, 1, bboxes.shape[-1])
-            for n in range(bboxes.shape[0]):
-                ts_n = ts[n][~mask[n]]
-                bboxes_n = bboxes[n][~mask[n]]
-                if bboxes_n.shape[0] == 0:
-                    continue
+        for feature_name in self._feature_names:
+            features = data.observed.features[feature_name]
+            mask = data.observed.mask
 
-                bboxes_n[1:, :] = (bboxes_n[1:, :] - bboxes_n[:-1, :]) / (ts_n[1:, :] - ts_n[:-1, :])
-                bboxes_n[0, :] = 0
-                fod[n][~mask[n]] = bboxes_n
-        else:
-            fod = torch.zeros_like(data.observed_bboxes)
-            fod[:, 1:, :] = (data.observed_bboxes[:, 1:, :] - data.observed_bboxes[:, :-1, :] - self._fod_mean) / self._fod_std
-            fod[:, 1:, :] = fod[:, 1:, :] * (1 - data.observed_temporal_mask[:, :-1].unsqueeze(-1).repeat(1, 1, data.observed_bboxes.shape[-1]).float())
+            if self._fod_time_scaled:
+                fod = torch.zeros_like(features)
+                ts = data.observed.ts.unsqueeze(-1).repeat(1, 1, features.shape[-1])
+                for n in range(features.shape[0]):
+                    ts_n = ts[n][~mask[n]]
+                    features_n = features[n][~mask[n]]
+                    if features_n.shape[0] == 0:
+                        continue
 
-        data.observed_bboxes = (data.observed_bboxes - self._coord_mean) / self._coord_std  # Centralize
-        data.unobserved_bboxes = (data.unobserved_bboxes - self._coord_mean) / self._coord_std  # Centralize
+                    features_n[1:, :] = (features_n[1:, :] - features_n[:-1, :]) / (ts_n[1:, :] - ts_n[:-1, :])
+                    features_n[0, :] = 0
+                    fod[n][~mask[n]] = features_n
+            else:
+                fod = torch.zeros_like(features)
+                fod[:, 1:, :] = features[:, 1:, :] - features[:, :-1, :]
 
-        data.observed_bboxes = torch.cat([data.observed_bboxes, fod], dim=-1)
-        data.observed_bboxes[data.observed_temporal_mask] = 0
-        data.unobserved_bboxes[data.unobserved_temporal_mask] = 0
+            # FoD standardization
+            fod = (fod - self._fod_mean[feature_name]) / self._fod_std[feature_name]
+            extended_mask = mask[:, :-1].unsqueeze(-1).repeat(1, 1, features.shape[-1]).float()
+            fod[:, 1:, :] = fod[:, 1:, :] * (1 - extended_mask)
+
+            features = (features - self._coord_mean[feature_name]) / self._coord_std[feature_name]  # Centralize
+            data.observed.features[feature_name] = torch.cat([features, fod], dim=-1)  # Add FOD
+            data.observed.features[feature_name][data.observed.mask] = 0  # Cleanup
+
+            data.unobserved.features[feature_name] = \
+                (data.unobserved.features[feature_name] - self._coord_mean[feature_name]) / self._coord_std[feature_name]  # Centralize
+            data.unobserved.features[feature_name][data.unobserved.mask] = 0  # Cleanup
 
         return data
 
@@ -100,13 +107,13 @@ class BBoxMinMaxScaling(Transform):
     def apply(self, data: VideoClipData) -> VideoClipData:
         # Concatenate all bboxes and masks
         all_bboxes = torch.cat([
-            data.observed_bboxes,                # (N, T, 5)
-            data.unobserved_bboxes.unsqueeze(1)  # (N, 1, 5)
-        ], dim=1).view(-1, data.observed_bboxes.shape[-1])  # (N * (T + 1), 5)
+            data.observed.features['bbox'],                # (N, T, 5)
+            data.unobserved.features['bbox'].unsqueeze(1)  # (N, 1, 5)
+        ], dim=1).view(-1, data.observed.features['bbox'].shape[-1])  # (N * (T + 1), 5)
 
         all_masks = torch.cat([
-            data.observed_temporal_mask,                # (N, T)
-            data.unobserved_temporal_mask.unsqueeze(1)  # (N, 1)
+            data.observed.mask,                # (N, T)
+            data.unobserved.mask.unsqueeze(1)  # (N, 1)
         ], dim=1).view(-1)  # (N * (T + 1))
 
         # Invert masks: 0 = valid, 1 = invalid
@@ -119,14 +126,18 @@ class BBoxMinMaxScaling(Transform):
         scale[scale == 0] = 1  # prevent division by zero
 
         # Apply scaling
-        data.observed_bboxes[:, :, :2] = (data.observed_bboxes[:, :, :2] - min_val) / scale
-        data.unobserved_bboxes[:, :2] = (data.unobserved_bboxes[:, :2] - min_val) / scale
-        data.observed_bboxes[:, :, 2:4] = (data.observed_bboxes[:, :, 2:4] - min_val) / scale
-        data.unobserved_bboxes[:, 2:4] = (data.unobserved_bboxes[:, 2:4] - min_val) / scale
+        data.observed.features['bbox'][:, :, :2] = (data.observed.features['bbox'][:, :, :2] - min_val) / scale
+        data.unobserved.features['bbox'][:, :2] = (data.unobserved.features['bbox'][:, :2] - min_val) / scale
+        data.observed.features['bbox'][:, :, 2:4] = (data.observed.features['bbox'][:, :, 2:4] - min_val) / scale
+        data.unobserved.features['bbox'][:, 2:4] = (data.unobserved.features['bbox'][:, 2:4] - min_val) / scale
 
         # Zero-out masked entries
-        data.observed_bboxes[data.observed_temporal_mask] = 0
-        data.unobserved_bboxes[data.unobserved_temporal_mask] = 0
+        data.observed.features['bbox'][data.observed.mask] = 0
+        data.unobserved.features['bbox'][data.unobserved.mask] = 0
+
+        if 'keypoints' in data.observed.features:
+            data.observed.features['keypoints'][:, :, :2] = (data.observed.features['keypoints'][:, :, :2] - min_val) / scale
+            data.unobserved.features['keypoints'][:, :2] = (data.unobserved.features['keypoints'][:, :2] - min_val) / scale
 
         return data
 
@@ -154,12 +165,22 @@ def test_bbox_min_scaling():
     ])  # second time step masked
 
     data = VideoClipData(
-        observed_bboxes=observed_bboxes,
-        observed_temporal_mask=observed_mask,
-        observed_ts=None,
-        unobserved_bboxes=unobserved_bboxes,
-        unobserved_ts=None,
-        unobserved_temporal_mask=unobserved_mask
+        observed=VideoClipPart(
+            ids=None,
+            ts=None,
+            mask=observed_mask,
+            features={
+                'bbox': observed_bboxes
+            }
+        ),
+        unobserved=VideoClipPart(
+            ids=None,
+            ts=None,
+            mask=unobserved_mask,
+            features={
+                'bbox': unobserved_bboxes
+            }
+        )
     )
 
     transform = BBoxMinMaxScaling()

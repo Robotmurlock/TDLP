@@ -5,6 +5,8 @@ from mot_jepa.datasets.dataset.common.data import VideoClipData
 
 
 class BBoxGaussianNoiseAugmentation(NonDeterministicAugmentation):
+    SUPPORTED_FEATURES = ['bbox', 'keypoints']
+
     """
     Add Gaussian noise based on the bbox width and height.
     """
@@ -37,8 +39,10 @@ class BBoxGaussianNoiseAugmentation(NonDeterministicAugmentation):
         return x + x_noise
 
     def _apply(self, data: VideoClipData) -> VideoClipData:
-        data.observed_bboxes = self._add_noise(data.observed_bboxes)
-        if self._unobs_noise:
-            data.unobserved_bboxes = self._add_noise(data.unobserved_bboxes)
+        for feature_name in self.SUPPORTED_FEATURES:
+            if feature_name in data.observed.features:
+                data.observed.features[feature_name] = self._add_noise(data.observed.features[feature_name])
+            if self._unobs_noise and feature_name in data.unobserved.features:
+                data.unobserved.features[feature_name] = self._add_noise(data.unobserved.features[feature_name])
 
         return data
