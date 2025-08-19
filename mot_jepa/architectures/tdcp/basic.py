@@ -9,7 +9,7 @@ from typing import Tuple
 import torch
 from torch import nn
 
-from mot_jepa.architectures.tdcp.detection_encoder import DetectionEncoder
+from mot_jepa.architectures.tdcp.feature_encoders import MotionEncoder
 
 
 class LastBBoxTDCPBasic(nn.Module):
@@ -32,7 +32,7 @@ class LastBBoxTDCPBasic(nn.Module):
             dropout: Dropout rate applied in the encoder.
         """
         super().__init__()
-        self._static_encoder = DetectionEncoder(
+        self._static_encoder = MotionEncoder(
             input_dim=input_dim,
             hidden_dim=hidden_dim,
             dropout=dropout,

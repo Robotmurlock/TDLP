@@ -7,5 +7,5 @@ defaults:
   - model_config: mm_bboxes_keypoints_appearance.yaml
   - path: default.yaml
 
-experiment_name: exp34-fromExp33-AddAppearance
+experiment_name: exp35-fromExp34-UpdatedInputAppearance
 dataset_name: DanceTrack

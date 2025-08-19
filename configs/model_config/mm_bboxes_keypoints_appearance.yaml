@@ -12,13 +12,20 @@ common_params:
   interaction_encoder_ffn_dim: 512
 per_feature_params:
   bbox:
-    input_dim: 5
+    feature_encoder_type: motion
+    feature_encoder_params:
+      input_dim: 5
   keypoints:
-    input_dim: 35
+    feature_encoder_type: motion
+    feature_encoder_params:
+      input_dim: 35
   appearance:
-    input_dim: 768
+    feature_encoder_type: parts_appearance
+    feature_encoder_params:
+      emb_size: 128
+      hidden_dim: ${model_config.common_params.hidden_dim}
     track_encoder_enable_motion_encoder: false
 aggregator_type: query
 aggregator_params:
-  hidden_dim: 256
+  hidden_dim: ${model_config.common_params.hidden_dim}
   num_heads: 8
