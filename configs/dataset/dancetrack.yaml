@@ -1,7 +1,7 @@
 defaults:
   - transform: scaled_bbox_keypoints.yaml
   - augmentations: default.yaml
-  - feature_extractor: pred_bbox_keypoints.yaml
+  - feature_extractor: pred_bbox_keypoints_appearance.yaml
 
 index:
   type: mot

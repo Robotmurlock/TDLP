@@ -87,18 +87,18 @@ class MyTracker(Tracker):
         data = self._convert_data(tracklets, objects_data, frame_index)
         data = self._transform(data)
         data.apply(lambda x: x.unsqueeze(0).to(self._device))
-        track_features, det_features, _, _ = self._model(
+        track_mm_features, det_mm_features, track_all_features, det_all_features = self._model(
             data.observed.features,
             data.observed.mask,
             data.unobserved.features,
             data.unobserved.mask
         )
-        track_features = track_features[0].cpu()
-        det_features = det_features[0].cpu()
-        track_features = F.normalize(track_features, dim=-1)
-        det_features = F.normalize(det_features, dim=-1)
+        track_mm_features = track_mm_features[0].cpu()
+        det_mm_features = det_mm_features[0].cpu()
+        track_mm_features = F.normalize(track_mm_features, dim=-1)
+        det_mm_features = F.normalize(det_mm_features, dim=-1)
 
-        cost_matrix = (track_features[:n_tracks] @ det_features[:n_detections].T).numpy()
+        cost_matrix = (track_mm_features[:n_tracks] @ det_mm_features[:n_detections].T).numpy()
         cost_matrix = 1 - (cost_matrix + 1) / 2 # [-1, 1] -> [0, 1]
         cost_matrix[cost_matrix > self._sim_threshold] = np.inf
 
@@ -434,7 +434,7 @@ def main(cfg: GlobalConfig) -> None:
         device=cfg.resources.accelerator,
         remember_threshold=30,
         use_conf=True,
-        sim_threshold=0.5
+        sim_threshold=0.9
     )
 
     scene_names = dataset_index.scenes

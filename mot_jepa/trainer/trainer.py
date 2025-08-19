@@ -6,7 +6,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Dict, Union, Any
+from typing import Optional, Dict, Union, Any
 
 import torch
 from torch import distributed as dist
@@ -22,10 +22,6 @@ from mot_jepa.trainer import torch_distrib_utils
 from mot_jepa.trainer import torch_helper
 from mot_jepa.trainer.losses.base import VideoClipLoss
 from mot_jepa.trainer.metrics import LossDictMeter, AccuracyMeter
-
-if TYPE_CHECKING:
-    from torch.utils.data import DataLoader
-
 
 logger = logging.getLogger('Trainer')
 
@@ -218,6 +214,33 @@ class ContrastiveTrainer:
 
         return val_metrics
 
+    def _forward_and_loss(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        track_x = data['observed']['features']
+        track_mask = data['observed']['mask']
+        track_ids = data['observed']['ids']
+        det_x = data['unobserved']['features']
+        det_mask = data['unobserved']['mask']
+        det_ids = data['unobserved']['ids']
+
+        model_output = self._model(track_x, track_mask, det_x, det_mask)
+        if isinstance(model_output, tuple) and len(model_output) == 4:
+            track_features, det_features, track_feat_dict, det_feat_dict = model_output
+        else:
+            track_features, det_features = model_output
+            track_feat_dict = None
+            det_feat_dict = None
+
+        return self._loss_func(
+            track_features,
+            det_features,
+            track_mask,
+            det_mask,
+            track_feat_dict,
+            det_feat_dict,
+            track_ids,
+            det_ids
+        )
+
     def _train_epoch(self, train_loader: 'DataLoader') -> Dict[str, float]:
         """
         Train for one epoch.
@@ -235,16 +258,8 @@ class ContrastiveTrainer:
 
         for data in torch_distrib_utils.rank_zero_tqdm(train_loader, desc='Training', unit='batch'):
             data = torch_helper.to_device(data, device=self._device)
-
-            # Extract data
-            track_features = data['observed']['features']
-            track_mask = data['observed']['mask']
-            det_features = data['unobserved']['features']
-            det_mask = data['unobserved']['mask']
-
             self._optimizer.zero_grad()
-            track_features, det_features, _, _ = self._model(track_features, track_mask, det_features, det_mask)
-            loss_dict = self._loss_func(track_features, det_features, track_mask, det_mask)
+            loss_dict = self._forward_and_loss(data)
             loss_dict['loss'].backward()
             if self._gradient_clip is not None:
                 torch.nn.utils.clip_grad_norm_(self._model.parameters(), self._gradient_clip)
@@ -291,15 +306,7 @@ class ContrastiveTrainer:
         self._model.eval()
         for data in torch_distrib_utils.rank_zero_tqdm(val_loader, desc='Evaluation', unit='batch'):
             data = torch_helper.to_device(data, device=self._device)
-
-            # Extract data
-            track_features = data['observed']['features']
-            track_mask = data['observed']['mask']
-            det_features = data['unobserved']['features']
-            det_mask = data['unobserved']['mask']
-
-            track_features, det_features, _, _ = self._model(track_features, track_mask, det_features, det_mask)
-            loss_dict = self._loss_func(track_features, det_features, track_mask, det_mask)
+            loss_dict = self._forward_and_loss(data)
 
             track_accuracy_meter.push(loss_dict['track_predictions'], loss_dict['track_labels'], mask=loss_dict['track_mask'])
             det_accuracy_meter.push(loss_dict['det_predictions'], loss_dict['det_labels'], mask=loss_dict['det_mask'])

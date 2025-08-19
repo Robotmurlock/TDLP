@@ -2,12 +2,20 @@ max_epochs: 20
 gradient_clip: null
 
 loss_config:
-  _target_: mot_jepa.trainer.losses.infonce.BatchLevelInfoNCE
+  _target_: mot_jepa.trainer.losses.infonce.MultiFeatureLoss
+  mm_loss:
+    _target_: mot_jepa.trainer.losses.infonce.ClipLevelInfoNCE
+  per_feature_losses:
+    bbox:
+      _target_: mot_jepa.trainer.losses.infonce.BatchLevelInfoNCE
+    keypoints:
+      _target_: mot_jepa.trainer.losses.infonce.BatchLevelInfoNCE
+    appearance:
+      _target_: mot_jepa.trainer.losses.infonce.IDLevelInfoNCE
 
 optimizer_config:
-  _target_: torch.optim.AdamW
+  _target_: torch.optim.Adam
   lr: 1e-4
-  weight_decay: 1e-4
 
 scheduler_config:
   _target_: mot_jepa.trainer.scheduler.create_warmup_cosine_annealing_scheduler
