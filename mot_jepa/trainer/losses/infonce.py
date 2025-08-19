@@ -1,10 +1,26 @@
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 import torch
 from pytorch_metric_learning import losses, distances, reducers
 from torch.nn import functional as F
 
 from mot_jepa.trainer.losses.base import VideoClipLoss
+
+
+def torch_combine(xs: List[torch.Tensor], dtype: torch.dtype) -> torch.Tensor:
+    """
+    Wrapper tor `torch.cat(...)` that returns torch.empy
+
+    Args:
+        xs: List of items to concatenate
+        dtype: torch.dtype
+
+    Returns:
+        Combined tensor
+    """
+    if len(xs) > 0:
+        return torch.cat(xs)
+    return torch.empty(0, dtype=dtype)
 
 
 class ClipLevelInfoNCE(VideoClipLoss):
@@ -84,10 +100,10 @@ class ClipLevelInfoNCE(VideoClipLoss):
                     track_predictions_list.append(sub_track_predictions)
                     det_predictions_list.append(sub_det_predictions)
 
-        filtered_track_labels = torch.cat(filtered_track_labels_list)
-        filtered_det_labels_list = torch.cat(filtered_det_labels_list)
-        track_predictions = torch.cat(track_predictions_list)
-        det_predictions = torch.cat(det_predictions_list)
+        filtered_track_labels = torch_combine(filtered_track_labels_list, dtype=torch.long)
+        filtered_det_labels_list = torch_combine(filtered_det_labels_list, dtype=torch.long)
+        track_predictions = torch_combine(track_predictions_list, dtype=torch.long)
+        det_predictions = torch_combine(det_predictions_list, dtype=torch.long)
 
         loss = sum(losses) / len(losses)
         return {
@@ -178,10 +194,10 @@ class BatchLevelInfoNCE(VideoClipLoss):
                     track_predictions_list.append(sub_track_predictions)
                     det_predictions_list.append(sub_det_predictions)
 
-        filtered_track_labels = torch.cat(filtered_track_labels_list)
-        filtered_det_labels_list = torch.cat(filtered_det_labels_list)
-        track_predictions = torch.cat(track_predictions_list)
-        det_predictions = torch.cat(det_predictions_list)
+        filtered_track_labels = torch_combine(filtered_track_labels_list, dtype=torch.long)
+        filtered_det_labels_list = torch_combine(filtered_det_labels_list, dtype=torch.long)
+        track_predictions = torch_combine(track_predictions_list, dtype=torch.long)
+        det_predictions = torch_combine(det_predictions_list, dtype=torch.long)
 
         return {
             'loss': loss,
@@ -217,13 +233,14 @@ class IDLevelInfoNCE(VideoClipLoss):
 
         B, N, E = track_x.shape
         agg_track_mask = track_mask.all(dim=-1)
+        agg_track_ids = track_ids.max(dim=-1).values
 
         flatten_track_mask = agg_track_mask.view(-1)
         flatten_det_mask = detection_mask.view(-1)
         flatten_track_x = track_x.view(B * N, -1)
         flatten_det_x = det_x.view(B * N, -1)
 
-        track_id_flat = track_ids.view(-1)[~flatten_track_mask]
+        track_id_flat = agg_track_ids.view(-1)[~flatten_track_mask]
         det_id_flat = det_ids.view(-1)[~flatten_det_mask]
         labels = torch.cat([track_id_flat, det_id_flat], dim=0)
         embeddings = torch.cat([
@@ -264,10 +281,10 @@ class IDLevelInfoNCE(VideoClipLoss):
                     track_predictions_list.append(sub_track_predictions)
                     det_predictions_list.append(sub_det_predictions)
 
-        filtered_track_labels = torch.cat(filtered_track_labels_list)
-        filtered_det_labels_list = torch.cat(filtered_det_labels_list)
-        track_predictions = torch.cat(track_predictions_list)
-        det_predictions = torch.cat(det_predictions_list)
+        filtered_track_labels = torch_combine(filtered_track_labels_list, dtype=torch.long)
+        filtered_det_labels_list = torch_combine(filtered_det_labels_list, dtype=torch.long)
+        track_predictions = torch_combine(track_predictions_list, dtype=torch.long)
+        det_predictions = torch_combine(det_predictions_list, dtype=torch.long)
 
         return {
             'loss': loss,

@@ -4,8 +4,8 @@ defaults:
   - dataset: dancetrack.yaml
   - train: default.yaml
   - eval: default.yaml
-  - model_config: mm_bboxes_keypoints.yaml
+  - model_config: mm_bboxes_keypoints_appearance.yaml
   - path: default.yaml
 
-experiment_name: exp31-fromExp29-AttnQueryAggregator
+experiment_name: exp34-fromExp33-AddAppearance
 dataset_name: DanceTrack

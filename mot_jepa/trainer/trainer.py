@@ -215,12 +215,14 @@ class ContrastiveTrainer:
         return val_metrics
 
     def _forward_and_loss(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
-        track_bboxes = data['observed_bboxes']
-        track_mask = data['observed_temporal_mask']
-        det_bboxes = data['unobserved_bboxes']
-        det_mask = data['unobserved_temporal_mask']
+        track_x = data['observed']['features']
+        track_mask = data['observed']['mask']
+        track_ids = data['observed']['ids']
+        det_x = data['unobserved']['features']
+        det_mask = data['unobserved']['mask']
+        det_ids = data['unobserved']['ids']
 
-        model_output = self._model(track_bboxes, track_mask, det_bboxes, det_mask)
+        model_output = self._model(track_x, track_mask, det_x, det_mask)
         if isinstance(model_output, tuple) and len(model_output) == 4:
             track_features, det_features, track_feat_dict, det_feat_dict = model_output
         else:
@@ -235,8 +237,8 @@ class ContrastiveTrainer:
             det_mask,
             track_feat_dict,
             det_feat_dict,
-            data.get('observed_ids'),
-            data.get('unobserved_ids'),
+            track_ids,
+            det_ids
         )
 
     def _train_epoch(self, train_loader: 'DataLoader') -> Dict[str, float]:

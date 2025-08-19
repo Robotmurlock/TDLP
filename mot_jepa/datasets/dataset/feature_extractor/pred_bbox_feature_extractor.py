@@ -15,6 +15,8 @@ class PredictionBBoxFeatureExtractor(FeatureExtractor):
     APPEARANCE_DIM = 768  # 6x128
     SUPPORTED_FEATURES = {'bbox', 'keypoints', 'appearance'}
 
+    WORKER_ID_STEP = 1_000_000
+
     def __init__(
         self,
         index: DatasetIndex,
@@ -37,6 +39,8 @@ class PredictionBBoxFeatureExtractor(FeatureExtractor):
         self._feature_names = set(feature_names)
         self._extra_features_reader = ExtraFeaturesReader(prediction_path)
         self._extra_false_positives = extra_false_positives
+
+        self._worker_id_counter = 0
 
     @staticmethod
     def bbox_to_tensor(bbox: List[float], score: float) -> torch.Tensor:
@@ -112,6 +116,13 @@ class PredictionBBoxFeatureExtractor(FeatureExtractor):
                     data = extra_false_positives[data_index]
                     self._set_features(self._feature_names, features, object_index, clip_index, data)
                     video_clip_part.mask[object_index, clip_index] = False
+
+                    # Setting ID is complex as it need has to be unique and not match any dataset ID
+                    worker_info = torch.utils.data.get_worker_info()
+                    worker_id = worker_info.id if worker_info is not None else 0
+                    self._worker_id_counter = (self._worker_id_counter + 1) % self.WORKER_ID_STEP
+                    next_id = self.WORKER_ID_STEP * worker_id + self._worker_id_counter
+                    video_clip_part.ids[object_index, clip_index] = next_id
 
         video_clip_part.features = features
         return video_clip_part
