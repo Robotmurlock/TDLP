@@ -40,6 +40,10 @@ class TrackDetectionContrastivePrediction(nn.Module):
         self._projector = projector
         self._object_interaction_encoder = object_interaction_encoder
 
+    @property
+    def output_dim(self) -> int:
+        return self._projector.output_dim
+
     def forward(
         self,
         track_x: torch.Tensor,
@@ -83,10 +87,12 @@ class MultiModalTDCP(nn.Module):
     def __init__(
         self,
         tdcps: Dict[str, TrackDetectionContrastivePrediction],
+        mm_dim: int,
         aggregator: TDCPAggregator
     ):
         super().__init__()
         self._tdcps = nn.ModuleDict(tdcps)
+        self._mm_linear_layers = nn.ModuleList([nn.Linear(tdcp.output_dim, mm_dim) for tdcp in tdcps.values()])
         self._aggregator = aggregator
 
     @property
@@ -110,8 +116,10 @@ class MultiModalTDCP(nn.Module):
                 det_mask=det_mask
             )
 
-        agg_track_features = self._aggregator(list(track_features.values()))
-        agg_det_features = self._aggregator(list(det_features.values()))
+        mm_track_features = [lin_layer(mm_feat) for lin_layer, mm_feat in zip(self._mm_linear_layers, list(track_features.values()))]
+        agg_track_features = self._aggregator(mm_track_features)
+        mm_det_features = [lin_layer(mm_feat) for lin_layer, mm_feat in zip(self._mm_linear_layers, list(det_features.values()))]
+        agg_det_features = self._aggregator(mm_det_features)
 
         return agg_track_features, agg_det_features, track_features, det_features
 
@@ -193,6 +201,7 @@ def build_tdcp_model(
 def build_mm_tdcp_model(
     per_feature_params: Dict[str, Any],
     common_params: Dict[str, Any],
+    mm_dim: int,
     aggregator_type: str,
     aggregator_params: Dict[str, Any]
 ) -> MultiModalTDCP:
@@ -208,7 +217,8 @@ def build_mm_tdcp_model(
     )
     return MultiModalTDCP(
         tdcps=tdcps,
-        aggregator=aggregator
+        aggregator=aggregator,
+        mm_dim=mm_dim
     )
 
 

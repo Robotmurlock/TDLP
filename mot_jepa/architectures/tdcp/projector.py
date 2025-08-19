@@ -22,12 +22,17 @@ class TrackToDetectionProjector(nn.Module):
 
         super().__init__()
         input_dim = input_dim if input_dim is not None else hidden_dim
+        self._hidden_dim = hidden_dim
         self._projector = nn.Sequential(
             nn.Linear(input_dim, intermediate_hidden_dim),
             nn.LayerNorm(intermediate_hidden_dim),
             nn.SiLU(),
             nn.Linear(intermediate_hidden_dim, hidden_dim),
         )
+
+    @property
+    def output_dim(self) -> int:
+        return self._hidden_dim
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Args:

@@ -1,4 +1,5 @@
 _target_: mot_jepa.architectures.tdcp.core.build_mm_tdcp_model
+mm_dim: 1024
 common_params:
   hidden_dim: 256
   dropout: 0.1
@@ -27,5 +28,5 @@ per_feature_params:
     track_encoder_enable_motion_encoder: false
 aggregator_type: query
 aggregator_params:
-  hidden_dim: ${model_config.common_params.hidden_dim}
+  hidden_dim: ${model_config.mm_dim}
   num_heads: 8
