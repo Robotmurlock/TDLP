@@ -105,6 +105,7 @@ def main(cfg: GlobalConfig) -> None:
 
         n_epochs=cfg.train.max_epochs,
         gradient_clip=cfg.train.gradient_clip,
+        mixed_precision=cfg.train.mixed_precision,
 
         tensorboard_log_dirpath=tensorboard_log_dirpath,
         checkpoints_dirpath=checkpoints_dirpath,

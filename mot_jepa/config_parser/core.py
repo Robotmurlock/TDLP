@@ -107,6 +107,7 @@ class TrainConfig:
     scheduler_config: dict
 
     gradient_clip: Optional[float] = None
+    mixed_precision: bool = False
 
     resume: bool = False
     truncate: bool = False

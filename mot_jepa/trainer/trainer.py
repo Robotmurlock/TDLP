@@ -16,6 +16,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 from torch.utils.tensorboard import SummaryWriter
+from torch.cuda.amp import GradScaler, autocast
 
 from mot_jepa.common.conventions import LAST_CKPT
 from mot_jepa.trainer import torch_distrib_utils
@@ -40,7 +41,8 @@ class ContrastiveTrainer:
         checkpoints_dirpath: str,
         metric_monitor: str = 'val-epoch/loss',
         metric_monitor_minimize: bool = True,
-        gradient_clip: Optional[float] = None
+        gradient_clip: Optional[float] = None,
+        mixed_precision: bool = False
     ):
         """
         Args:
@@ -54,6 +56,7 @@ class ContrastiveTrainer:
             metric_monitor_minimize: Whether to minimize the monitored metric
 
             gradient_clip: Clip gradient norm during training
+            mixed_precision: Use automatic mixed precision training and evaluation
         """
         # Node info
         self._use_ddp = False  # Modified in _setup()
@@ -74,6 +77,8 @@ class ContrastiveTrainer:
         # Trainer parameters
         self._n_epochs = n_epochs
         self._gradient_clip = gradient_clip
+        self._mixed_precision = mixed_precision and torch.cuda.is_available()
+        self._scaler = GradScaler(enabled=self._mixed_precision)
 
         # Checkpoints
         self._best_loss: Optional[float] = None
@@ -222,24 +227,25 @@ class ContrastiveTrainer:
         det_mask = data['unobserved']['mask']
         det_ids = data['unobserved']['ids']
 
-        model_output = self._model(track_x, track_mask, det_x, det_mask)
-        if isinstance(model_output, tuple) and len(model_output) == 4:
-            track_features, det_features, track_feat_dict, det_feat_dict = model_output
-        else:
-            track_features, det_features = model_output
-            track_feat_dict = None
-            det_feat_dict = None
+        with autocast(enabled=self._mixed_precision):
+            model_output = self._model(track_x, track_mask, det_x, det_mask)
+            if isinstance(model_output, tuple) and len(model_output) == 4:
+                track_features, det_features, track_feat_dict, det_feat_dict = model_output
+            else:
+                track_features, det_features = model_output
+                track_feat_dict = None
+                det_feat_dict = None
 
-        return self._loss_func(
-            track_features,
-            det_features,
-            track_mask,
-            det_mask,
-            track_feat_dict,
-            det_feat_dict,
-            track_ids,
-            det_ids
-        )
+            return self._loss_func(
+                track_features,
+                det_features,
+                track_mask,
+                det_mask,
+                track_feat_dict,
+                det_feat_dict,
+                track_ids,
+                det_ids
+            )
 
     def _train_epoch(self, train_loader: 'DataLoader') -> Dict[str, float]:
         """
@@ -260,10 +266,14 @@ class ContrastiveTrainer:
             data = torch_helper.to_device(data, device=self._device)
             self._optimizer.zero_grad()
             loss_dict = self._forward_and_loss(data)
-            loss_dict['loss'].backward()
+            loss = loss_dict['loss']
+            self._scaler.scale(loss).backward()
             if self._gradient_clip is not None:
+                self._scaler.unscale_(self._optimizer)
                 torch.nn.utils.clip_grad_norm_(self._model.parameters(), self._gradient_clip)
-            self._optimizer.step()
+            self._scaler.step(self._optimizer)
+            self._scaler.update()
+
             self._scheduler.step()
 
             track_accuracy_meter.push(loss_dict['track_predictions'], loss_dict['track_labels'], mask=loss_dict['track_mask'])
@@ -414,5 +424,6 @@ class ContrastiveTrainer:
             f'device={self._device}, '
             f'world_size={self._world_size}, '
             f'rank={self._rank}, '
-            f'local_rank={self._local_rank})'
+            f'local_rank={self._local_rank}, '
+            f'mixed_precision={self._mixed_precision})'
         )
