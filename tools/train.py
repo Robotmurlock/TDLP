@@ -75,7 +75,7 @@ def main(cfg: GlobalConfig) -> None:
 
     val_dataloader = create_dataloader(
         val_dataset,
-        batch_size=cfg.resources.batch_size,
+        batch_size=cfg.resources.val_batch_size,
         num_workers=cfg.resources.num_workers,
         shuffle=False
     )
@@ -105,6 +105,7 @@ def main(cfg: GlobalConfig) -> None:
 
         n_epochs=cfg.train.max_epochs,
         gradient_clip=cfg.train.gradient_clip,
+        mixed_precision=cfg.train.mixed_precision,
 
         tensorboard_log_dirpath=tensorboard_log_dirpath,
         checkpoints_dirpath=checkpoints_dirpath,

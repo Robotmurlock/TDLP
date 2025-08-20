@@ -91,6 +91,11 @@ class ResourcesConfig:
     accelerator: str
     num_workers: int
 
+    val_batch_size: Optional[int] = None
+
+    def __post_init__(self) -> None:
+        self.val_batch_size = self.batch_size if self.val_batch_size is None else self.val_batch_size
+
 
 @dataclass
 class TrainCheckpointConfig:
@@ -107,6 +112,7 @@ class TrainConfig:
     scheduler_config: dict
 
     gradient_clip: Optional[float] = None
+    mixed_precision: bool = False
 
     resume: bool = False
     truncate: bool = False
