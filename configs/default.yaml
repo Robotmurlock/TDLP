@@ -7,5 +7,5 @@ defaults:
   - model_config: mm_bboxes_keypoints_appearance.yaml
   - path: default.yaml
 
-experiment_name: exp36-fromExp35-ExpandDimBeforeAggregator
+experiment_name: exp37-fromExp36-AddAppearanceNoise
 dataset_name: DanceTrack

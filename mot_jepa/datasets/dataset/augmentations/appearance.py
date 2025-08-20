@@ -24,6 +24,6 @@ class AppearanceNoiseAugmentation(Augmentation):
             observed_emb = getattr(data, attr).features['appearance']
             observed_emb_std = observed_emb.std(dim=-1, keepdim=True)
             observed_emb_noise = torch.randn_like(observed_emb) * observed_emb_std
-            setattr(data, attr, observed_emb + self._alpha * observed_emb_noise)
+            getattr(data, attr).features['appearance'] = observed_emb + self._alpha * observed_emb_noise
 
         return data
