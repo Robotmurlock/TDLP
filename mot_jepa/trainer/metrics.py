@@ -38,19 +38,12 @@ class LossMeter(Meter):
     """
     Tracks and aggregates the loss over multiple steps.
     """
-    def __init__(
-        self,
-        device: Union[str, int, torch.device]
-    ):
-        """
-        Args:
-            device: The device where the loss will be stored.
-        """
+    def __init__(self):
         self._world_size = dist.get_world_size() if dist.is_initialized() else 1
-        self._sync = self._world_size > 1
+        self._sync = dist.is_initialized()
 
         # State
-        self._total_loss: torch.Tensor = torch.tensor(0.0, dtype=torch.float32, device=device)
+        self._total_loss: float = 0.0
         self._steps: int = 0
 
     @property
@@ -58,18 +51,20 @@ class LossMeter(Meter):
         return self._steps
 
     @torch.no_grad()
-    def push(self, data: torch.Tensor) -> torch.Tensor:
+    def push(self, data: torch.Tensor) -> float:
         loss = data.detach()
 
-        if self._sync and dist.is_initialized():
+        if self._sync:
             loss_reduced = loss.clone()
             dist.reduce(loss_reduced, dst=0)
-            loss = loss_reduced / self._world_size
+            loss_value = float(loss_reduced.cpu() / self._world_size)
+        else:
+            loss_value = float(loss.cpu())
 
-        self._total_loss += loss
+        self._total_loss += loss_value
         self._steps += 1
 
-        return loss.item()
+        return loss_value
 
     @torch.no_grad()
     def aggregate_and_flush(self) -> float:
@@ -77,32 +72,19 @@ class LossMeter(Meter):
 
         # Aggregate
         avg_loss = self._total_loss / self._steps
-        if not self._sync and dist.is_initialized():
-            avg_loss_reduced = avg_loss.clone()
-            if dist.is_initialized():
-                dist.reduce(avg_loss_reduced, dst=0)
-                avg_loss = avg_loss_reduced / self._world_size
 
         # Flush
-        self._total_loss *= 0.0
+        self._total_loss = 0.0
         self._steps = 0
 
-        return avg_loss.cpu().item()
+        return avg_loss
 
 
 class LossDictMeter(Meter):
     """
     Tracks and aggregates the dict-like loss over multiple steps.
     """
-    def __init__(
-        self,
-        device: Union[str, int, torch.device]
-    ):
-        """
-        Args:
-            device: The device where the loss will be stored.
-        """
-        self._device = device
+    def __init__(self):
         self._meters = {}
 
     @property
@@ -120,7 +102,7 @@ class LossDictMeter(Meter):
         output: Dict[str, torch.Tensor] = {}
         for name, value in data.items():
             if name not in self._meters:
-                self._meters[name] = LossMeter(self._device)
+                self._meters[name] = LossMeter()
             output[name] = self._meters[name].push(value)
 
         return output
@@ -141,19 +123,19 @@ class AccuracyMeter(Meter):
     """
     def __init__(
         self,
-        device: Union[str, int, torch.device],
         use_percentages: bool = True
     ):
         """
         Args:
-            device: The device where the accuracy will be stored.
             use_percentages: Returns values from interval [0, 100] if True else [0, 1]
         """
+        self._world_size = dist.get_world_size() if dist.is_initialized() else 1
+        self._sync = dist.is_initialized()
         self._use_percentages = use_percentages
 
         # State
-        self._total: torch.Tensor = torch.tensor(0.0, dtype=torch.long, device=device)
-        self._correct: torch.Tensor = torch.tensor(0.0, dtype=torch.long, device=device)
+        self._total: float = 0.0
+        self._correct: float = 0.0
 
     @torch.no_grad()
     def push(self, outputs: torch.Tensor, target: torch.Tensor, mask: Optional[torch.Tensor] = None) -> None:
@@ -165,13 +147,26 @@ class AccuracyMeter(Meter):
             target: The true labels.
             mask: Mask
         """
+        outputs, target = outputs.detach(), target.detach()
         if mask is not None:
+            mask = mask.detach()
             outputs = outputs[~mask]
             target = target[~mask]
-        outputs, target = outputs.detach().view(-1), target.detach().view(-1)
+        outputs, target = outputs.view(-1), target.view(-1)
 
-        self._total += outputs.size(0)
-        self._correct += outputs.eq(target).sum()
+        if dist.is_initialized():
+            delta_size = outputs.size(0) * self._world_size
+            local_delta_correct = outputs.eq(target).sum()
+            delta_correct_reduced = local_delta_correct.clone()
+            dist.reduce(delta_correct_reduced, dst=0)
+            delta_correct = float(delta_correct_reduced.cpu())
+        else:
+            delta_correct = float(outputs.eq(target).sum().cpu())
+            delta_size = outputs.size(0)
+
+
+        self._total += delta_size
+        self._correct += delta_correct
 
     @torch.no_grad()
     def aggregate_and_flush(self) -> float:
@@ -186,20 +181,11 @@ class AccuracyMeter(Meter):
         """
         assert self._total > 0, 'Nothing to aggregate!'
 
-        # Aggregate
-        total_reduced = self._total.clone()
-        if dist.is_initialized():
-            dist.reduce(total_reduced, dst=0)
-
-        correct_reduced = self._correct.clone()
-        if dist.is_initialized():
-            dist.reduce(correct_reduced, dst=0)
-
-        accuracy = correct_reduced.float() / total_reduced.float() \
+        accuracy = self._correct / self._total \
             * (100.0 if self._use_percentages else 1.0)
 
         # Flush
         self._total *= 0
         self._correct *= 0
 
-        return float(accuracy.cpu().item())
+        return accuracy

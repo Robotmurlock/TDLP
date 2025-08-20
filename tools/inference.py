@@ -45,7 +45,7 @@ class MyTracker(Tracker):
         initialization_threshold: int = 1,
         remember_threshold: int = 30,
         clip_length: Optional[int] = None,
-        new_tracklet_detection_threshold: float = 0.7,
+        new_tracklet_detection_threshold: float = 0.9,
         use_conf: bool = True
     ):
         super().__init__()
@@ -129,7 +129,7 @@ class MyTracker(Tracker):
         _, _ = frame, detections  # Ignored (for now)
         scene_name = self.get_scene()
         objects_data = self._extra_features_reader.read(scene_name, frame_index)
-        objects_data = [data for data in objects_data if data['bbox_conf'] > 0.6]
+        objects_data = [data for data in objects_data if data['bbox_conf'] > 0.4]
         # objects_data = self._remove_duplicates(self._extra_features_reader.read(scene_name, frame_index), detections)
         detections = [PredBBox.create(BBox.from_xywh(*data['bbox_xywh']), label='pedestrian', conf=data['bbox_conf']) for data in objects_data]
 
@@ -434,7 +434,7 @@ def main(cfg: GlobalConfig) -> None:
         device=cfg.resources.accelerator,
         remember_threshold=30,
         use_conf=True,
-        sim_threshold=0.9
+        sim_threshold=0.5
     )
 
     scene_names = dataset_index.scenes

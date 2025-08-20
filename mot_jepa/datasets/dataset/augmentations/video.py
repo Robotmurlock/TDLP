@@ -1,6 +1,6 @@
 import math
 import random
-from typing import Tuple
+from typing import Tuple, Dict, List
 
 import torch
 
@@ -35,6 +35,29 @@ class PointOcclusionAugmentations(Augmentation):
             for n in range(n_detections):
                 if random.random() < self._drop_ratio / clip_length:
                     data.unobserved.mask[n] = True
+
+        return data
+
+
+class MaskFeatureAugmentation(Augmentation):
+    def __init__(self, drop_ratios: Dict[str, float]):
+        super().__init__()
+        self._drop_ratios = drop_ratios
+
+    def apply(self, data: VideoClipData) -> VideoClipData:
+        features_to_mask: List[str] = []
+        for feature_name, drop_ratio in self._drop_ratios.items():
+            if random.random() < drop_ratio:
+                features_to_mask.append(feature_name)
+
+        if len(features_to_mask) == len(self._drop_ratios):
+            # Can't mask all features
+            # Fallback: skip
+            return data
+
+        for feature_name in features_to_mask:
+            data.observed.features[feature_name] *= 0
+            data.unobserved.features[feature_name] *= 0
 
         return data
 

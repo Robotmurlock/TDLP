@@ -1,6 +1,6 @@
-max_epochs: 20
+max_epochs: 10
 gradient_clip: null
-mixed_precision: false
+mixed_precision: true
 
 loss_config:
   _target_: mot_jepa.trainer.losses.infonce.MultiFeatureLoss

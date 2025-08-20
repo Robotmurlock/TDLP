@@ -1,3 +1,4 @@
-batch_size: 16
+batch_size: 12
+val_batch_size: 6
 accelerator: 'cuda:0'
-num_workers: 20
+num_workers: 12

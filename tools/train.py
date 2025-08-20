@@ -75,7 +75,7 @@ def main(cfg: GlobalConfig) -> None:
 
     val_dataloader = create_dataloader(
         val_dataset,
-        batch_size=cfg.resources.batch_size,
+        batch_size=cfg.resources.val_batch_size,
         num_workers=cfg.resources.num_workers,
         shuffle=False
     )

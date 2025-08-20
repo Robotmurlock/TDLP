@@ -79,6 +79,8 @@ class ContrastiveTrainer:
         self._gradient_clip = gradient_clip
         self._mixed_precision = mixed_precision and torch.cuda.is_available()
         self._scaler = GradScaler(enabled=self._mixed_precision)
+        if self._mixed_precision:
+            logger.info('Using mixed precision training.')
 
         # Checkpoints
         self._best_loss: Optional[float] = None
@@ -258,9 +260,9 @@ class ContrastiveTrainer:
             Metrics
         """
         self._model.train()
-        loss_meter = LossDictMeter(device=self._device)
-        track_accuracy_meter = AccuracyMeter(device=self._device, use_percentages=True)
-        det_accuracy_meter = AccuracyMeter(device=self._device, use_percentages=True)
+        loss_meter = LossDictMeter()
+        track_accuracy_meter = AccuracyMeter(use_percentages=True)
+        det_accuracy_meter = AccuracyMeter(use_percentages=True)
 
         for data in torch_distrib_utils.rank_zero_tqdm(train_loader, desc='Training', unit='batch'):
             data = torch_helper.to_device(data, device=self._device)
@@ -309,9 +311,9 @@ class ContrastiveTrainer:
         Returns:
             Metrics
         """
-        loss_meter = LossDictMeter(device=self._device)
-        track_accuracy_meter = AccuracyMeter(device=self._device, use_percentages=True)
-        det_accuracy_meter = AccuracyMeter(device=self._device, use_percentages=True)
+        loss_meter = LossDictMeter()
+        track_accuracy_meter = AccuracyMeter(use_percentages=True)
+        det_accuracy_meter = AccuracyMeter(use_percentages=True)
 
         self._model.eval()
         for data in torch_distrib_utils.rank_zero_tqdm(val_loader, desc='Evaluation', unit='batch'):
