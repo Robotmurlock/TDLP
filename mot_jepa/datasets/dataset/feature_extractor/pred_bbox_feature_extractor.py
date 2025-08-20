@@ -76,8 +76,8 @@ class PredictionBBoxFeatureExtractor(FeatureExtractor):
             keypoints = sum([d[:2] for d in data['keypoints_xyc']], []) + [data['keypoints_conf']]
             features['keypoints'][object_index, clip_index, :] = torch.tensor(keypoints, dtype=torch.float32)
         if 'appearance' in feature_names:
-            appearance = sum(data['appearance_embeddings'], [])
-            features['appearance'][object_index, clip_index, :] = torch.tensor(appearance, dtype=torch.float32)
+            embs = [[e * float(visibility) for e in emb] for emb, visibility in zip(data['appearance_embeddings'], data['appearance_visibility'])]
+            features['appearance'][object_index, clip_index, :] = torch.tensor(sum(embs, []), dtype=torch.float32)
 
     def _extract_extra_data(
         self,

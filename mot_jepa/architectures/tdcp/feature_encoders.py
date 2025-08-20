@@ -1,17 +1,19 @@
 """Feed-forward encoder for detection features."""
 
+from typing import Dict, Any
+
 import torch
 from torch import nn
 
 
-class DetectionEncoder(nn.Module):
+class MotionEncoder(nn.Module):
     """Two-layer feed-forward network with normalization and dropout."""
 
     def __init__(
         self,
         input_dim: int,
         hidden_dim: int,
-        dropout: float = 0.1,
+        dropout: float = 0.1
     ) -> None:
         """Args:
             input_dim: Dimensionality of the input detections.
@@ -39,8 +41,41 @@ class DetectionEncoder(nn.Module):
         return self.encoder(x)
 
 
+class PartsAppearanceEncoder(nn.Module):
+    NUM_PARTS = 5
+
+    def __init__(self, emb_size: int, hidden_dim: int, dropout: float = 0.1):
+        """
+        Linear projection of part-based features to a single hidden dimension.
+        """
+        super().__init__()
+        self._hidden_dim = hidden_dim
+        self._emb_size = emb_size
+        self._dropout = dropout
+
+        self._linear_layers = nn.ModuleList([nn.Linear(emb_size, hidden_dim, bias=True)] * (self.NUM_PARTS + 1))
+        self._drop = nn.Dropout(dropout)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        assert x.shape[-1] == (self._emb_size * (self.NUM_PARTS + 1))
+        projected = [layer(x[..., i * self._emb_size:(i+1) * self._emb_size]) for i, layer in enumerate(self._linear_layers)]
+        aggregated = torch.stack(projected, dim=1).sum(dim=1)
+        return self._drop(aggregated)
+
+
+FEATURE_ENCODER_CATALOG = {
+    'motion': MotionEncoder,
+    'parts_appearance': PartsAppearanceEncoder
+}
+
+
+def feature_encoder_factory(feature_encoder_type: str, feature_encoder_params: Dict[str, Any]) -> nn.Module:
+    agg_cls = FEATURE_ENCODER_CATALOG[feature_encoder_type]
+    return agg_cls(**feature_encoder_params)
+
+
 def run_test() -> None:
-    de = DetectionEncoder(
+    de = MotionEncoder(
         input_dim=4,
         hidden_dim=3
     )

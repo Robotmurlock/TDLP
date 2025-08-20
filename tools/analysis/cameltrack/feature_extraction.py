@@ -112,7 +112,8 @@ class CamelTrackParser:
                 'bbox_conf': row.bbox_conf,
                 'keypoints_xyc': row.keypoints_xyc.tolist(),
                 'keypoints_conf': row.keypoints_conf,
-                'appearance_embeddings': row.embeddings.tolist()
+                'appearance_embeddings': row.embeddings.tolist(),
+                'appearance_visibility': row.visibility_scores.tolist()
             })
 
         return result
@@ -171,7 +172,7 @@ def add_track_ids(pred_frame_data: List[dict], gt_frame_data: List[FrameObjectDa
 @pipeline.task('cameltrack-features-extraction')
 def main(cfg: GlobalConfig) -> None:
     # Hardcoded stuff
-    SPLIT = 'train'
+    SPLIT = 'val'
     CAMELTRACK_STATES_PATH = f'/media/home/cameltrack-states/dancetrack-{SPLIT}.pklz'
     TEMPORARY_DIRPATH = '/media/home/cameltrack-states/tmp'
     EXTRACTED_OUTPUT_PATH = '/media/home/cameltrack-states/extracted-features'
