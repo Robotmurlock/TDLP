@@ -17,6 +17,6 @@ jobs:
       - name: Install uv
         run: pip install uv
       - name: Sync dependencies
-        run: uv pip sync
+        run: uv sync
       - name: Run tests
-        run: uv run pytest
+        run: uv run --with pytest pytest
