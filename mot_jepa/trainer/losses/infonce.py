@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict
 
 import torch
 from pytorch_metric_learning import losses, distances, reducers
@@ -179,93 +179,6 @@ class BatchLevelInfoNCE(VideoClipLoss):
             'det_predictions': det_predictions,
             'track_mask': None,
             'det_mask': None
-        }
-
-
-class IDLevelInfoNCE(VideoClipLoss):
-    def __init__(self):
-        super().__init__()
-        self._loss_func = losses.NTXentLoss(
-            distance=distances.CosineSimilarity(), reducer=reducers.AvgNonZeroReducer()
-        )
-
-    def forward(
-        self,
-        track_x: torch.Tensor,
-        det_x: torch.Tensor,
-        track_mask: torch.Tensor,
-        detection_mask: torch.Tensor,
-        track_ids: Optional[torch.Tensor] = None,
-        det_ids: Optional[torch.Tensor] = None,
-        track_feature_dict: Optional[Dict[str, torch.Tensor]] = None,
-        det_feature_dict: Optional[Dict[str, torch.Tensor]] = None,
-    ) -> Dict[str, torch.Tensor]:
-        if track_ids is None or det_ids is None:
-            raise ValueError('IDLevelInfoNCE requires track_ids and det_ids.')
-
-        B, N, _ = track_x.shape
-        agg_track_mask = track_mask.all(dim=-1)
-        flatten_track_x = track_x.view(B * N, -1)
-        flatten_det_x = det_x.view(B * N, -1)
-        flatten_track_ids = track_ids.view(B * N).long()
-        flatten_det_ids = det_ids.view(B * N).long()
-        flatten_track_mask = agg_track_mask.view(B * N)
-        flatten_det_mask = detection_mask.view(B * N)
-
-        filtered_track_x = flatten_track_x[~flatten_track_mask]
-        filtered_det_x = flatten_det_x[~flatten_det_mask]
-        filtered_track_ids = flatten_track_ids[~flatten_track_mask]
-        filtered_det_ids = flatten_det_ids[~flatten_det_mask]
-
-        embeddings = torch.cat([filtered_track_x, filtered_det_x], dim=0)
-        labels = torch.cat([filtered_track_ids, filtered_det_ids], dim=0)
-        loss = self._loss_func(embeddings, labels)
-
-        # Calculate clip-level labels and predictions for metrics/debugging
-        filtered_track_labels_list = []
-        filtered_det_labels_list = []
-        track_predictions_list = []
-        det_predictions_list = []
-        with torch.no_grad():
-            for b_i in range(B):
-                combined_mask = ~agg_track_mask[b_i] & ~detection_mask[b_i]
-                if not bool(combined_mask.any().item()):
-                    continue
-
-                sub_track_labels = track_ids[b_i][combined_mask]
-                sub_det_labels = det_ids[b_i][combined_mask]
-                sub_track_x = track_x[b_i][combined_mask]
-                sub_det_x = det_x[b_i][combined_mask]
-                sub_track_x = F.normalize(sub_track_x, dim=-1)
-                sub_det_x = F.normalize(sub_det_x, dim=-1)
-
-                n_sub_tracks = sub_track_x.shape[0]
-                n_sub_det = sub_det_x.shape[0]
-                if n_sub_tracks > 0 and n_sub_det > 0:
-                    distances = torch.cdist(sub_track_x, sub_det_x, p=2)
-                    sub_track_predictions = torch.argmin(distances, dim=1)
-                    sub_det_predictions = torch.argmin(distances, dim=0)
-
-                    filtered_track_labels_list.append(sub_track_labels)
-                    filtered_det_labels_list.append(sub_det_labels)
-                    track_predictions_list.append(sub_track_predictions)
-                    det_predictions_list.append(sub_det_predictions)
-
-        filtered_track_labels = torch.cat(filtered_track_labels_list)
-        filtered_det_labels_list = torch.cat(filtered_det_labels_list)
-        track_predictions = torch.cat(track_predictions_list)
-        det_predictions = torch.cat(det_predictions_list)
-
-        return {
-            'loss': loss,
-            'track_loss': loss,
-            'det_loss': loss,
-            'track_labels': filtered_track_labels,
-            'det_labels': filtered_det_labels_list,
-            'track_predictions': track_predictions,
-            'det_predictions': det_predictions,
-            'track_mask': None,
-            'det_mask': None,
         }
 
 
