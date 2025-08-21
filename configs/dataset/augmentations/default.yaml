@@ -20,9 +20,3 @@ augmentations:
     switch_ratio: 0.3
   - _target_: mot_jepa.datasets.dataset.augmentations.appearance.AppearanceNoiseAugmentation
     alpha: 0.5
-  - _target_: mot_jepa.datasets.dataset.augmentations.video.MaskFeatureAugmentation
-    drop_ratios:
-      appearance: 0.4
-      bbox: 0.1
-      keypoints: 0.1
-

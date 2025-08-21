@@ -7,5 +7,6 @@ defaults:
   - model_config: mm_bboxes_keypoints_appearance.yaml
   - path: default.yaml
 
-experiment_name: exp39-fromExp38-AddFeatureDropoutAugmentation
+experiment_name: exp40-fromExp38-SumAggregator
+# TODO: Fix Keypoints augmentations
 dataset_name: DanceTrack
