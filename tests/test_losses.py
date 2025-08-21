@@ -89,8 +89,9 @@ def test_id_level_infonce_matches_batch_level_when_ids_equal_indices():
     track_ids = torch.tensor([[0, 1]])
     det_ids = torch.tensor([[0, 1]])
 
-    batch_loss = BatchLevelInfoNCE()(track_x, det_x, track_mask, det_mask)
-    id_loss = IDLevelInfoNCE()(track_x, det_x, track_mask, det_mask, track_ids, det_ids)
+    # Both should produce same result when IDs equal sequential indices
+    batch_loss = BatchLevelInfoNCE()(track_x, det_x, track_mask, det_mask, track_ids=track_ids, det_ids=det_ids)
+    id_loss = IDLevelInfoNCE()(track_x, det_x, track_mask, det_mask, track_ids=track_ids, det_ids=det_ids)
 
     assert torch.isclose(batch_loss["loss"], id_loss["loss"], atol=1e-6)
 

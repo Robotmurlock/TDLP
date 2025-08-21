@@ -417,7 +417,7 @@ def main(cfg: GlobalConfig) -> None:
         device=cfg.resources.accelerator,
         remember_threshold=30,
         use_conf=True,
-        sim_threshold=0.5
+        sim_threshold=0.1
     )
 
     scene_names = dataset_index.scenes

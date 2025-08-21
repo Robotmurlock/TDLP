@@ -9,14 +9,14 @@ from mot_jepa.trainer.losses.base import VideoClipLoss
 
 def torch_combine(xs: List[torch.Tensor], dtype: torch.dtype) -> torch.Tensor:
     """
-    Wrapper tor `torch.cat(...)` that returns torch.empy
-
+    Concatenate tensors or return empty tensor if list is empty.
+    
     Args:
-        xs: List of items to concatenate
-        dtype: torch.dtype
-
+        xs: List of tensors to concatenate
+        dtype: Data type for empty tensor when xs is empty
+        
     Returns:
-        Combined tensor
+        Concatenated tensor or empty tensor with specified dtype
     """
     if len(xs) > 0:
         return torch.cat(xs)
@@ -24,6 +24,12 @@ def torch_combine(xs: List[torch.Tensor], dtype: torch.dtype) -> torch.Tensor:
 
 
 class ClipLevelInfoNCE(VideoClipLoss):
+    """
+    InfoNCE loss computed separately for each clip in the batch.
+    
+    Applies InfoNCE to tracks and detections within each clip as positive pairs.
+    Uses cosine similarity and averages over non-zero valid pairs per clip.
+    """
     def __init__(self):
         super().__init__()
         self._loss_func = losses.NTXentLoss(distance=distances.CosineSimilarity(), reducer=reducers.AvgNonZeroReducer())
@@ -120,6 +126,12 @@ class ClipLevelInfoNCE(VideoClipLoss):
 
 
 class BatchLevelInfoNCE(VideoClipLoss):
+    """
+    InfoNCE loss computed across the entire batch.
+    
+    Allows cross-clip matching by treating all tracks and detections as potential
+    positive pairs. Uses cosine similarity and averages over non-zero valid pairs.
+    """
     def __init__(self):
         super().__init__()
         self._loss_func = losses.NTXentLoss(distance=distances.CosineSimilarity(), reducer=reducers.AvgNonZeroReducer())
@@ -213,6 +225,12 @@ class BatchLevelInfoNCE(VideoClipLoss):
 
 
 class IDLevelInfoNCE(VideoClipLoss):
+    """
+    InfoNCE loss using object IDs to determine positive pairs.
+    
+    Uses explicit identity information rather than spatial/temporal correspondence.
+    Requires track_ids and det_ids parameters. Uses cosine similarity.
+    """
     def __init__(self):
         super().__init__()
         self._loss_func = losses.NTXentLoss(distance=distances.CosineSimilarity(), reducer=reducers.AvgNonZeroReducer())
@@ -228,6 +246,25 @@ class IDLevelInfoNCE(VideoClipLoss):
         track_ids: Optional[torch.Tensor] = None,
         det_ids: Optional[torch.Tensor] = None,
     ) -> Dict[str, torch.Tensor]:
+        """
+        Compute InfoNCE loss using object IDs for positive pairs.
+        
+        Args:
+            track_x: Track embeddings (B, N, E)
+            det_x: Detection embeddings (B, N, E)
+            track_mask: Track mask (B, N, T), True=missing
+            detection_mask: Detection mask (B, N), True=missing
+            track_feature_dict: Optional modality-specific track features
+            det_feature_dict: Optional modality-specific detection features
+            track_ids: Track identifiers (B, N) - required
+            det_ids: Detection identifiers (B, N) - required
+            
+        Returns:
+            Dictionary with loss, predictions, and evaluation metrics
+            
+        Raises:
+            ValueError: If track_ids or det_ids not provided
+        """
         if track_ids is None or det_ids is None:
             raise ValueError('IDLevelInfoNCE requires track_ids and det_ids.')
 
