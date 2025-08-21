@@ -26,5 +26,7 @@ per_feature_params:
       emb_size: 128
       hidden_dim: ${model_config.common_params.hidden_dim}
     track_encoder_enable_motion_encoder: false
-aggregator_type: sum
-aggregator_params: {}
+aggregator_type: query
+aggregator_params:
+  hidden_dim: ${model_config.mm_dim}
+  num_heads: 8

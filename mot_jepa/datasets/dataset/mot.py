@@ -167,6 +167,10 @@ class MOTClipDataset(Dataset):
 
         return clip_index
 
+    @property
+    def scene_names_per_frame(self) -> List[str]:
+        return [scene_name for scene_name, _, _ in self._clip_index]
+
     @staticmethod
     def _create_id_lookup(index: DatasetIndex) -> Dict[str, int]:
         """
