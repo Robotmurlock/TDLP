@@ -1,13 +1,15 @@
 import os
+from typing import Optional
 
 import hydra
 import torch
-from torch.utils.data import DataLoader, DistributedSampler
+from torch.utils.data import DataLoader, DistributedSampler, Sampler
 
 from mot_jepa.common import conventions
 from mot_jepa.common.project import CONFIGS_PATH
 from mot_jepa.config_parser import GlobalConfig
 from mot_jepa.datasets.dataset import dataset_index_factory, MOTClipDataset
+from mot_jepa.trainer.torch_distrib_utils import DistributedSamplerWrapper
 from mot_jepa.trainer.trainer import ContrastiveTrainer
 from mot_jepa.utils import pipeline
 from tools.utils import check_train_experiment_history, logger
@@ -17,23 +19,46 @@ def create_dataloader(
     dataset: MOTClipDataset,
     batch_size: int,
     num_workers: int,
-    shuffle: bool
+    train: bool,
+    sampler: Optional[Sampler] = None,
+    use_batch_sampler: bool = False
 ) -> DataLoader:
+    if use_batch_sampler:
+        logger.warning('Using batch sampler. Configured batch size is ignored!')
+
     rank = int(os.environ.get('RANK', -1))
     world_size = int(os.environ.get('WORLD_SIZE', 1))
     is_ddp = (rank != -1)
 
+    # Setup sampler
+    if sampler is None:
+        if is_ddp:
+            shuffle = None
+            sampler = DistributedSampler(
+                dataset,
+                num_replicas=world_size,
+                rank=rank,
+                shuffle=train
+            )
+        else:
+            shuffle = train if use_batch_sampler else None
+    else:
+        shuffle = None
+        if is_ddp:
+            sampler = DistributedSamplerWrapper(
+                sampler=sampler,
+                num_replicas=world_size,
+                rank=rank,
+                shuffle=True
+            )
+
     return DataLoader(
         dataset=dataset,
-        batch_size=batch_size,
+        batch_size=batch_size if not use_batch_sampler else 1,
         num_workers=num_workers,
-        shuffle=shuffle if not is_ddp else None,
-        sampler=DistributedSampler(
-            dataset,
-            num_replicas=world_size,
-            rank=rank,
-            shuffle=shuffle
-        ) if is_ddp else None
+        shuffle=shuffle,
+        sampler=sampler if not use_batch_sampler else None,
+        batch_sampler=sampler if use_batch_sampler else None
     )
 
 
@@ -57,18 +82,22 @@ def main(cfg: GlobalConfig) -> None:
 
     train_dataset = cfg.dataset.build_dataset(train_index)
 
+    train_sampler = cfg.dataset.build_sampler(train_dataset)
+
     train_dataloader = create_dataloader(
         train_dataset,
         batch_size=cfg.resources.batch_size,
         num_workers=cfg.resources.num_workers,
-        shuffle=True
+        train=True,
+        sampler=train_sampler,
+        use_batch_sampler=cfg.dataset.use_batch_sampler
     )
 
     val_index = dataset_index_factory(
         name=cfg.dataset.index.type,
         params=cfg.dataset.index.params,
         split='val',
-        sequence_list=cfg.dataset.index.sequence_list
+        sequence_list=cfg.dataset.index.sequence_list,
     )
 
     val_dataset = cfg.dataset.build_dataset(val_index)
@@ -77,7 +106,9 @@ def main(cfg: GlobalConfig) -> None:
         val_dataset,
         batch_size=cfg.resources.val_batch_size,
         num_workers=cfg.resources.num_workers,
-        shuffle=False
+        train=False,
+        sampler=None,
+        use_batch_sampler=False
     )
 
     model = cfg.build_model()

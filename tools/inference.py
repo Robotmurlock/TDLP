@@ -104,22 +104,6 @@ class MyTracker(Tracker):
 
         return hungarian(cost_matrix)
 
-    @staticmethod
-    def _remove_duplicates(objects_data: List[dict], detections: List[PredBBox]) -> List[dict]:
-        override_detections = [PredBBox.create(BBox.from_xywh(*data['bbox_xywh']), label='pedestrian', conf=data['bbox_conf'])
-                               for data in objects_data]
-        n_override = len(override_detections)
-        n_detections = len(detections)
-        cost_matrix = np.zeros(shape=(n_override, n_detections), dtype=np.float32)
-        for i in range(n_override):
-            for j in range(n_detections):
-                score = override_detections[i].iou(detections[j])
-                cost_matrix[i, j] = -score if score > 0.75 else np.inf
-
-        matches, _, _ = hungarian(cost_matrix)
-        return [objects_data[i] for i, _ in matches]
-
-
     def track(self,
         tracklets: List[Tracklet],
         detections: List[PredBBox],
@@ -130,7 +114,6 @@ class MyTracker(Tracker):
         scene_name = self.get_scene()
         objects_data = self._extra_features_reader.read(scene_name, frame_index)
         objects_data = [data for data in objects_data if data['bbox_conf'] > 0.4]
-        # objects_data = self._remove_duplicates(self._extra_features_reader.read(scene_name, frame_index), detections)
         detections = [PredBBox.create(BBox.from_xywh(*data['bbox_xywh']), label='pedestrian', conf=data['bbox_conf']) for data in objects_data]
 
         # Remove deleted
@@ -434,7 +417,7 @@ def main(cfg: GlobalConfig) -> None:
         device=cfg.resources.accelerator,
         remember_threshold=30,
         use_conf=True,
-        sim_threshold=0.5
+        sim_threshold=0.1
     )
 
     scene_names = dataset_index.scenes

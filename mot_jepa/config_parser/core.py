@@ -15,6 +15,7 @@ from pydantic.dataclasses import dataclass
 from torch import nn
 from torch.optim.lr_scheduler import LRScheduler
 from torch.optim.optimizer import Optimizer
+from torch.utils.data import Sampler
 
 from mot_jepa.common import project, conventions
 from mot_jepa.datasets.dataset import DatasetIndex, MOTClipDataset
@@ -49,6 +50,8 @@ class DatasetConfig:
     feature_extractor: Optional[FeatureExtractorConfig] = None
     transform: Optional[dict] = None
     augmentations: Optional[dict] = None
+    sampler: Optional[dict] = None
+    use_batch_sampler: bool = False
 
     def __post_init__(self) -> None:
         """
@@ -83,6 +86,16 @@ class DatasetConfig:
             feature_extractor_type=self.feature_extractor.extractor_type if self.feature_extractor is not None else None,
             feature_extractor_params=self.feature_extractor.extractor_params if self.feature_extractor is not None else None
         )
+
+    def build_sampler(self, dataset: MOTClipDataset) -> Optional[Sampler]:
+        if self.sampler is None:
+            return None
+
+        # noinspection PyUnresolvedReferences
+        if self.sampler['_target_'].endswith('.from_dataset'):
+            self.sampler['dataset'] = dataset
+
+        return instantiate(self.sampler)
 
 
 @dataclass

@@ -2,6 +2,7 @@ defaults:
   - transform: scaled_bbox_keypoints.yaml
   - augmentations: default.yaml
   - feature_extractor: pred_bbox_keypoints_appearance.yaml
+  - sampler: scene_sampler.yaml
 
 index:
   type: mot
@@ -14,3 +15,5 @@ clip_length: 30
 min_clip_tracks: 1
 clip_sampling_step: 1
 val_clip_sampling_step: 1
+
+use_batch_sampler: true

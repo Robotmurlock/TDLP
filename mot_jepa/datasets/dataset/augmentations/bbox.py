@@ -32,10 +32,9 @@ class BBoxGaussianNoiseAugmentation(NonDeterministicAugmentation):
             Input vector with noise
         """
         x_noise = self._sigma * torch.randn_like(x)
-        x_noise[..., 0] *= x[..., 2]  # `x` noise is proportional to the `h`
-        x_noise[..., 2] *= x[..., 2]  # `h` noise is proportional to the `h`
-        x_noise[..., 1] *= x[..., 3]  # `y` noise is proportional to the `w`
-        x_noise[..., 3] *= x[..., 3]  # `w` noise is proportional to the `w`
+        x_noise[..., :-1][..., 0::2] *= x[..., 2].unsqueeze(-1)  # `x/h` noise is proportional to the `h`
+        x_noise[..., :-1][..., 1::2] *= x[..., 3].unsqueeze(-1)  # `y/w` noise is proportional to the `w`
+        x_noise[..., -1] *= 0.1
         return x + x_noise
 
     def _apply(self, data: VideoClipData) -> VideoClipData:
