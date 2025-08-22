@@ -7,5 +7,5 @@ defaults:
   - model_config: mm_bboxes_keypoints_appearance.yaml
   - path: default.yaml
 
-experiment_name: exp42-fromExp41-SceneBatchSampler
+experiment_name: exp44-fromExp41-BiggerAppearanceHiddenDim
 dataset_name: DanceTrack

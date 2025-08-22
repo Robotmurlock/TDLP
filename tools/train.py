@@ -41,7 +41,7 @@ def create_dataloader(
                 shuffle=train
             )
         else:
-            shuffle = train if use_batch_sampler else None
+            shuffle = train if not use_batch_sampler else None
     else:
         shuffle = None
         if is_ddp:

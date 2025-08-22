@@ -21,12 +21,18 @@ per_feature_params:
     feature_encoder_params:
       input_dim: 35
   appearance:
+    hidden_dim: 512
     feature_encoder_type: parts_appearance
     feature_encoder_params:
       emb_size: 128
-      hidden_dim: ${model_config.common_params.hidden_dim}
+      hidden_dim: 512
     track_encoder_enable_motion_encoder: false
 aggregator_type: query
 aggregator_params:
   hidden_dim: ${model_config.mm_dim}
   num_heads: 8
+
+drop_mm_probas:
+  bbox: 0.1
+  keypoints: 0.1
+  appearance: 0.4
