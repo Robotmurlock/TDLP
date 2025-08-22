@@ -135,7 +135,7 @@ class MyTracker(Tracker):
         for t_i in unmatched_tracklets:
             tracklet = tracklets[t_i]
 
-            if tracklet.lost_time > self._remember_threshold or tracklet.state == TrackletState.NEW:
+            if tracklet.lost_time > self._remember_threshold or tracklet.age < 3:
                 tracklet.state = TrackletState.DELETED
             else:
                 tracklet.state = TrackletState.LOST
@@ -417,7 +417,7 @@ def main(cfg: GlobalConfig) -> None:
         device=cfg.resources.accelerator,
         remember_threshold=30,
         use_conf=True,
-        sim_threshold=0.1
+        sim_threshold=0.5
     )
 
     scene_names = dataset_index.scenes

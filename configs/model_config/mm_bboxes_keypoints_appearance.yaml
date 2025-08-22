@@ -30,3 +30,8 @@ aggregator_type: query
 aggregator_params:
   hidden_dim: ${model_config.mm_dim}
   num_heads: 8
+
+drop_mm_probas:
+  bbox: 0.1
+  keypoints: 0.1
+  appearance: 0.4
