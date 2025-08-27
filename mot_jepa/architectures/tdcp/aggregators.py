@@ -104,12 +104,48 @@ class TDCPQueryAttentionPool(TDCPAggregator):
         return einops.rearrange(pooled, '(b n) e -> b n e', b=B, n=N)
 
 
+class TDCPTransformer(nn.Module):
+    def __init__(self, n_features: int, hidden_dim: int, n_heads: int = 4, n_layers: int = 1, dropout: float = 0.0):
+        super().__init__()
+        self._type_emb = nn.Parameter(torch.randn(n_features, hidden_dim))  # [M, E]
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=hidden_dim, nhead=n_heads,
+            dim_feedforward=2 * hidden_dim,
+            batch_first=True,
+            dropout=dropout
+        )
+        self._enc = nn.TransformerEncoder(
+            encoder_layer=encoder_layer,
+            num_layers=n_layers
+        )
+        self._q_proj = nn.Linear(hidden_dim, hidden_dim)
+
+        self._out_norm = nn.LayerNorm(hidden_dim)
+        self._out_proj = nn.Linear(hidden_dim, hidden_dim)
+
+    def forward(self, features: Sequence[torch.Tensor]) -> torch.Tensor:
+        # x: list of [B, N, E] -> [B, N, M, E]
+        x = torch.stack(features, dim=2)
+        B, N, M, E = x.shape
+        x = x + self._type_emb.view(1, 1, M, E)              # add type token
+        x = einops.rearrange(x, 'b n m e -> (b n) m e')
+        h = self._enc(x)                                     # [B*N, M, E]
+        # build a data-conditioned query: mean-pooled context
+        q = self._q_proj(h.mean(dim=1, keepdim=True))        # [B*N, 1, E]
+        attn = torch.softmax((q @ h.transpose(1, 2)) / (E**0.5), dim=-1)  # [B*N, 1, M]
+        pooled = torch.mean((attn @ h), dim=-2)                        # [B*N, E]
+        projected = self._out_proj(self._out_norm(pooled))
+        return einops.rearrange(projected, '(b n) e -> b n e', b=B, n=N)
+
+
+
 TDCP_AGGREGATOR_CATALOG = {
     'sum': TDCPSumAggregator,
     'linear_sum': TDCPLinearSumAggregator,
     'static_softmax': TDCPStaticSoftmaxSum,
     'attn': TDCPAttnWeightedSum,
-    'query': TDCPQueryAttentionPool
+    'query': TDCPQueryAttentionPool,
+    'transformer': TDCPTransformer
 }
 
 

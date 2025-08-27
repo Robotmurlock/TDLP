@@ -27,12 +27,9 @@ per_feature_params:
       emb_size: 128
       hidden_dim: 512
     track_encoder_enable_motion_encoder: false
-aggregator_type: query
+aggregator_type: transformer
 aggregator_params:
   hidden_dim: ${model_config.mm_dim}
-  num_heads: 8
-
-drop_mm_probas:
-  bbox: 0.1
-  keypoints: 0.1
-  appearance: 0.4
+  n_heads: 8
+  n_layers: 2
+  dropout: 0.1

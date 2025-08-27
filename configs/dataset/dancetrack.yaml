@@ -10,7 +10,7 @@ index:
       - /media/home/DanceTrack-orig/
 
 n_tracks: 40
-clip_length: 30
+clip_length: 50
 min_clip_tracks: 1
 clip_sampling_step: 1
 val_clip_sampling_step: 1

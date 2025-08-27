@@ -10,11 +10,11 @@ from mot_jepa.trainer.losses.base import VideoClipLoss
 def torch_combine(xs: List[torch.Tensor], dtype: torch.dtype) -> torch.Tensor:
     """
     Concatenate tensors or return empty tensor if list is empty.
-    
+
     Args:
         xs: List of tensors to concatenate
         dtype: Data type for empty tensor when xs is empty
-        
+
     Returns:
         Concatenated tensor or empty tensor with specified dtype
     """
@@ -26,7 +26,7 @@ def torch_combine(xs: List[torch.Tensor], dtype: torch.dtype) -> torch.Tensor:
 class ClipLevelInfoNCE(VideoClipLoss):
     """
     InfoNCE loss computed separately for each clip in the batch.
-    
+
     Applies InfoNCE to tracks and detections within each clip as positive pairs.
     Uses cosine similarity and averages over non-zero valid pairs per clip.
     """
@@ -80,8 +80,6 @@ class ClipLevelInfoNCE(VideoClipLoss):
         track_predictions_list = []
         det_predictions_list = []
         with torch.no_grad():
-            track_labels = torch.arange(N).to(track_x).unsqueeze(0).repeat(B, 1).long()
-            det_labels = torch.arange(N).to(det_x).unsqueeze(0).repeat(B, 1).long()
             for b_i in range(B):
                 combined_mask = ~agg_track_mask[b_i] & ~detection_mask[b_i]
                 if not bool(combined_mask.any().item()):
@@ -97,9 +95,9 @@ class ClipLevelInfoNCE(VideoClipLoss):
                 n_sub_tracks = sub_track_x.shape[0]
                 n_sub_det = sub_det_x.shape[0]
                 if n_sub_tracks > 0 and n_sub_det > 0:
-                    distances = torch.cdist(sub_track_x, sub_det_x, p=2)
-                    sub_track_predictions = torch.argmin(distances, dim=1)
-                    sub_det_predictions = torch.argmin(distances, dim=0)
+                    distances = sub_track_x @ sub_det_x.T
+                    sub_track_predictions = sub_track_labels[torch.argmax(distances, dim=1)]
+                    sub_det_predictions = sub_det_labels[torch.argmax(distances, dim=0)]
 
                     filtered_track_labels_list.append(sub_track_labels)
                     filtered_det_labels_list.append(sub_det_labels)
@@ -128,7 +126,7 @@ class ClipLevelInfoNCE(VideoClipLoss):
 class BatchLevelInfoNCE(VideoClipLoss):
     """
     InfoNCE loss computed across the entire batch.
-    
+
     Allows cross-clip matching by treating all tracks and detections as potential
     positive pairs. Uses cosine similarity and averages over non-zero valid pairs.
     """
@@ -197,9 +195,9 @@ class BatchLevelInfoNCE(VideoClipLoss):
                 n_sub_tracks = sub_track_x.shape[0]
                 n_sub_det = sub_det_x.shape[0]
                 if n_sub_tracks > 0 and n_sub_det > 0:
-                    distances = torch.cdist(sub_track_x, sub_det_x, p=2)
-                    sub_track_predictions = torch.argmin(distances, dim=1)
-                    sub_det_predictions = torch.argmin(distances, dim=0)
+                    distances = sub_track_x @ sub_det_x.T
+                    sub_track_predictions = sub_track_labels[torch.argmax(distances, dim=1)]
+                    sub_det_predictions = sub_det_labels[torch.argmax(distances, dim=0)]
 
                     filtered_track_labels_list.append(sub_track_labels)
                     filtered_det_labels_list.append(sub_det_labels)
@@ -227,7 +225,7 @@ class BatchLevelInfoNCE(VideoClipLoss):
 class IDLevelInfoNCE(VideoClipLoss):
     """
     InfoNCE loss using object IDs to determine positive pairs.
-    
+
     Uses explicit identity information rather than spatial/temporal correspondence.
     Requires track_ids and det_ids parameters. Uses cosine similarity.
     """
@@ -248,7 +246,7 @@ class IDLevelInfoNCE(VideoClipLoss):
     ) -> Dict[str, torch.Tensor]:
         """
         Compute InfoNCE loss using object IDs for positive pairs.
-        
+
         Args:
             track_x: Track embeddings (B, N, E)
             det_x: Detection embeddings (B, N, E)
@@ -258,10 +256,10 @@ class IDLevelInfoNCE(VideoClipLoss):
             det_feature_dict: Optional modality-specific detection features
             track_ids: Track identifiers (B, N) - required
             det_ids: Detection identifiers (B, N) - required
-            
+
         Returns:
             Dictionary with loss, predictions, and evaluation metrics
-            
+
         Raises:
             ValueError: If track_ids or det_ids not provided
         """
@@ -309,9 +307,9 @@ class IDLevelInfoNCE(VideoClipLoss):
                 n_sub_tracks = sub_track_x.shape[0]
                 n_sub_det = sub_det_x.shape[0]
                 if n_sub_tracks > 0 and n_sub_det > 0:
-                    distances = torch.cdist(sub_track_x, sub_det_x, p=2)
-                    sub_track_predictions = torch.argmin(distances, dim=1)
-                    sub_det_predictions = torch.argmin(distances, dim=0)
+                    distances = sub_track_x @ sub_det_x.T
+                    sub_track_predictions = sub_track_labels[torch.argmax(distances, dim=1)]
+                    sub_det_predictions = sub_det_labels[torch.argmax(distances, dim=0)]
 
                     filtered_track_labels_list.append(sub_track_labels)
                     filtered_det_labels_list.append(sub_det_labels)
@@ -412,14 +410,14 @@ def run_test() -> None:
     track_x = torch.tensor([
         [
             [0, 1],
-            [0, 1],
-            [0, 1],
+            [1, 0],
+            [1, 1],
             [0, 0]
         ],
         [
             [0, 1],
-            [0, 1],
-            [0, 1],
+            [1, 0],
+            [1, 1],
             [0, 0]
         ]
     ], dtype=torch.float32)
@@ -427,14 +425,14 @@ def run_test() -> None:
     det_x = torch.tensor([
         [
             [0, 1],
-            [0, 1],
-            [0, 1],
+            [1, 0],
+            [1, 1],
             [0, 0]
         ],
         [
             [0, 1],
-            [0, 1],
-            [0, 1],
+            [1, 0],
+            [1, 1],
             [0, 0]
         ]
     ], dtype=torch.float32)

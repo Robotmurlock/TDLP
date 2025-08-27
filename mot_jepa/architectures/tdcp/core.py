@@ -89,60 +89,19 @@ class MultiModalTDCP(nn.Module):
         self,
         tdcps: Dict[str, TrackDetectionContrastivePrediction],
         mm_dim: int,
-        aggregator: TDCPAggregator,
-        drop_mm_probas: Optional[Dict[str, float]] = None
+        aggregator: TDCPAggregator
     ):
         super().__init__()
         self._tdcps = nn.ModuleDict(tdcps)
-        self._mm_linear_layers = nn.ModuleList([nn.Linear(tdcp.output_dim, mm_dim) for tdcp in tdcps.values()])
+        self._mm_linear_layers = nn.ModuleList([
+            nn.Linear(tdcp.output_dim, mm_dim)
+            for tdcp in tdcps.values()
+        ])
         self._aggregator = aggregator
-        self._drop_mm_probas = drop_mm_probas
-
-        if self._drop_mm_probas is not None:
-            assert set(self._drop_mm_probas.keys()) == set(self._tdcps.keys()), \
-                f'drop_mm_probas keys must match tdcps keys. Got {set(self._drop_mm_probas.keys())} and {set(self._tdcps.keys())}'
 
     @property
     def feature_names(self) -> Set[str]:
         return set(self._tdcps.keys())
-
-    def _drop_mm_tokens(self, mm_track_features: List[torch.Tensor], mm_det_features: List[torch.Tensor]) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
-        """
-        Apply token dropping to multimodal features during training.
-        
-        Args:
-            mm_track_features: List of track feature tensors
-            mm_det_features: List of detection feature tensors
-            
-        Returns:
-            Tuple of (modified_track_features, modified_det_features)
-        """
-        # Skip dropping during evaluation
-        if not self.training or self._drop_mm_probas is None:
-            return mm_track_features, mm_det_features
-
-        # Generate drop flags for each modality
-        feature_names = list(self._tdcps.keys())
-        drop_flags: List[bool] = []
-        for feature_name in feature_names:
-            flag = random.random() < self._drop_mm_probas[feature_name]
-            drop_flags.append(flag)
-
-        # edge-case: If all drop flags are True, return original features
-        if all(drop_flags):
-            return mm_track_features, mm_det_features
-
-        # Apply dropping to each modality
-        filtered_track_features = []
-        filtered_det_features = []
-        for i, (feature_name, track_feat, det_feat) in enumerate(zip(feature_names, mm_track_features, mm_det_features)):
-            if not drop_flags[i]:
-                filtered_track_features.append(track_feat)
-                filtered_det_features.append(det_feat)
-        
-        return filtered_track_features, filtered_det_features 
-        
-
 
     def forward(
         self,
@@ -163,7 +122,6 @@ class MultiModalTDCP(nn.Module):
 
         mm_track_features = [lin_layer(mm_feat) for lin_layer, mm_feat in zip(self._mm_linear_layers, list(track_features.values()))]
         mm_det_features = [lin_layer(mm_feat) for lin_layer, mm_feat in zip(self._mm_linear_layers, list(det_features.values()))]
-        mm_track_features, mm_det_features = self._drop_mm_tokens(mm_track_features, mm_det_features)
         agg_track_features = self._aggregator(mm_track_features)
         agg_det_features = self._aggregator(mm_det_features)
 
@@ -249,8 +207,7 @@ def build_mm_tdcp_model(
     common_params: Dict[str, Any],
     mm_dim: int,
     aggregator_type: str,
-    aggregator_params: Dict[str, Any],
-    drop_mm_probas: Optional[Dict[str, float]] = None
+    aggregator_params: Dict[str, Any]
 ) -> MultiModalTDCP:
     tdcps: Dict[str, TrackDetectionContrastivePrediction] = {}
     for feature_name in per_feature_params:
@@ -265,8 +222,7 @@ def build_mm_tdcp_model(
     return MultiModalTDCP(
         tdcps=tdcps,
         aggregator=aggregator,
-        mm_dim=mm_dim,
-        drop_mm_probas=drop_mm_probas
+        mm_dim=mm_dim
     )
 
 
