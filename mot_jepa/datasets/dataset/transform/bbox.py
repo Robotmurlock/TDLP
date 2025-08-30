@@ -8,12 +8,32 @@ from mot_jepa.datasets.dataset.transform.utils import expand_pattern
 
 
 class BBoxXYWHtoXYXY(Transform):
-    def __init__(self):
+    def __init__(self, keep_wh: bool = False):
         super().__init__(name='bbox_xywh_to_xyxy')
+        self._keep_wh = keep_wh
 
     def apply(self, data: VideoClipData) -> VideoClipData:
-        data.observed.features['bbox'][..., 2:4] = data.observed.features['bbox'][..., :2] + data.observed.features['bbox'][..., 2:4]
-        data.unobserved.features['bbox'][..., 2:4] = data.unobserved.features['bbox'][..., :2] + data.unobserved.features['bbox'][..., 2:4]
+        if 'bbox' not in data.observed.features:
+            return data
+
+        observed_bottom_xy = data.observed.features['bbox'][..., :2] + data.observed.features['bbox'][..., 2:4]
+        unobserved_bottom_xy = data.unobserved.features['bbox'][..., :2] + data.unobserved.features['bbox'][..., 2:4]
+
+        if not self._keep_wh:
+            data.observed.features['bbox'][..., 2:4] = observed_bottom_xy
+            data.unobserved.features['bbox'][..., 2:4] = unobserved_bottom_xy
+        else:
+            data.observed.features['bbox'] = torch.cat([
+                data.observed.features['bbox'][..., :2], 
+                observed_bottom_xy, 
+                data.observed.features['bbox'][..., 2:]
+            ], dim=-1)
+            data.unobserved.features['bbox'] = torch.cat([
+                data.unobserved.features['bbox'][..., :2], 
+                unobserved_bottom_xy, 
+                data.unobserved.features['bbox'][..., 2:]
+            ], dim=-1)
+
         return data
 
 
@@ -33,6 +53,9 @@ class BBoxStandardization(Transform):
 
     def apply(self, data: VideoClipData) -> VideoClipData:
         for feature_name in self._feature_names:
+            if feature_name not in data.observed.features:
+                continue
+
             data.observed.features[feature_name] = \
                 (data.observed.features[feature_name] - self._coord_mean[feature_name]) / self._coord_std[feature_name]  # Centralize
             data.unobserved.features[feature_name] = \
@@ -65,6 +88,9 @@ class FeatureFODStandardization(Transform):
 
     def apply(self, data: VideoClipData) -> VideoClipData:
         for feature_name in self._feature_names:
+            if feature_name not in data.observed.features:
+                continue
+
             features = data.observed.features[feature_name]
             mask = data.observed.mask
 
@@ -105,39 +131,65 @@ class BBoxMinMaxScaling(Transform):
         super().__init__(name='bbox_min_max_scaling')
 
     def apply(self, data: VideoClipData) -> VideoClipData:
+        bboxes_list: List[torch.Tensor] = []
+        masks_list: List[torch.Tensor] = []
+
+        # Collect coordinates and masks
+        if 'bbox' in data.observed.features:
+            N, T, _ = data.observed.features['bbox'].shape
+            bboxes_list.append(data.observed.features['bbox'][:, :, :4].reshape(N, 2 * T, 2))  # (N, 2 * T, 2)
+            masks_list.append(data.observed.mask.repeat(1, 2))
+            bboxes_list.append(data.unobserved.features['bbox'][:, :4].unsqueeze(1).reshape(N, 2 * 1, 2))  # (N, 2, 2)
+            masks_list.append(data.unobserved.mask.unsqueeze(1).repeat(1, 2))
+        if 'keypoints' in data.observed.features:
+            N, T, D = data.observed.features['keypoints'].shape
+            assert (D - 1) % 2 == 0
+            n_coords = (D - 1) // 2
+            bboxes_list.append(data.observed.features['keypoints'][:, :, :-1].reshape(N, T * n_coords, 2))  # (N, T * n_coords, 2)
+            masks_list.append(data.observed.mask.repeat(1, n_coords))
+            bboxes_list.append(data.unobserved.features['keypoints'][:, :-1].unsqueeze(1).reshape(N, n_coords, 2))  # (N, n_coords, 2)
+            masks_list.append(data.unobserved.mask.unsqueeze(1).repeat(1, n_coords))
+
         # Concatenate all bboxes and masks
-        all_bboxes = torch.cat([
-            data.observed.features['bbox'],                # (N, T, 5)
-            data.unobserved.features['bbox'].unsqueeze(1)  # (N, 1, 5)
-        ], dim=1).view(-1, data.observed.features['bbox'].shape[-1])  # (N * (T + 1), 5)
+        all_bboxes = torch.cat(bboxes_list, dim=1)  # (N, X, 2)
+        all_masks = torch.cat(masks_list, dim=1)  # (N, X)
 
-        all_masks = torch.cat([
-            data.observed.mask,                # (N, T)
-            data.unobserved.mask.unsqueeze(1)  # (N, 1)
-        ], dim=1).view(-1)  # (N * (T + 1))
-
-        # Invert masks: 0 = valid, 1 = invalid
-        valid_mask = ~all_masks
-
-        valid_bboxes = all_bboxes[valid_mask][:, :4].reshape(-1, 2)
+        # Compute min and max values
+        valid_bboxes = all_bboxes[~all_masks].view(-1, 2)
         min_val = valid_bboxes.min(dim=0).values
         max_val = valid_bboxes.max(dim=0).values
         scale = max_val - min_val
         scale[scale == 0] = 1  # prevent division by zero
 
-        # Apply scaling
-        data.observed.features['bbox'][:, :, :2] = (data.observed.features['bbox'][:, :, :2] - min_val) / scale
-        data.unobserved.features['bbox'][:, :2] = (data.unobserved.features['bbox'][:, :2] - min_val) / scale
-        data.observed.features['bbox'][:, :, 2:4] = (data.observed.features['bbox'][:, :, 2:4] - min_val) / scale
-        data.unobserved.features['bbox'][:, 2:4] = (data.unobserved.features['bbox'][:, 2:4] - min_val) / scale
+        if 'bbox' in data.observed.features:
+            # Update bboxes
+            data.observed.features['bbox'][:, :, :2] = (data.observed.features['bbox'][:, :, :2] - min_val) / scale
+            data.unobserved.features['bbox'][:, :2] = (data.unobserved.features['bbox'][:, :2] - min_val) / scale
+            data.observed.features['bbox'][:, :, 2:4] = (data.observed.features['bbox'][:, :, 2:4] - min_val) / scale
+            data.unobserved.features['bbox'][:, 2:4] = (data.unobserved.features['bbox'][:, 2:4] - min_val) / scale
 
-        # Zero-out masked entries
-        data.observed.features['bbox'][data.observed.mask] = 0
-        data.unobserved.features['bbox'][data.unobserved.mask] = 0
+            # Zero-out masked entries
+            data.observed.features['bbox'][data.observed.mask] = 0
+            data.unobserved.features['bbox'][data.unobserved.mask] = 0
 
         if 'keypoints' in data.observed.features:
-            data.observed.features['keypoints'][:, :, :2] = (data.observed.features['keypoints'][:, :, :2] - min_val) / scale
-            data.unobserved.features['keypoints'][:, :2] = (data.unobserved.features['keypoints'][:, :2] - min_val) / scale
+            N, T, D = data.observed.features['keypoints'].shape
+            assert (D - 1) % 2 == 0
+            n_coords = (D - 1) // 2
+
+            # Rescale keypoints
+            observed_keypoints = data.observed.features['keypoints'][:, :, :-1].reshape(N, T * n_coords, 2)
+            unobserved_keypoints = data.unobserved.features['keypoints'][:, :-1].unsqueeze(1).reshape(N, n_coords, 2)
+            observed_keypoints = (observed_keypoints - min_val) / scale
+            unobserved_keypoints = (unobserved_keypoints - min_val) / scale
+
+            # Update keypoints
+            data.observed.features['keypoints'][:, :, :-1] = observed_keypoints.reshape(N, T, n_coords * 2)
+            data.unobserved.features['keypoints'][:, :-1] = unobserved_keypoints.reshape(N, n_coords * 2)
+
+            # Zero-out masked entries
+            data.observed.features['keypoints'][data.observed.mask] = 0
+            data.unobserved.features['keypoints'][data.unobserved.mask] = 0
 
         return data
 

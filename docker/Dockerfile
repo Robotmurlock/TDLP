@@ -22,4 +22,14 @@ RUN pip install uv
 RUN uv init
 RUN uv sync
 
+RUN apt-get install -y git python3.10-venv
+RUN git clone https://github.com/Megvii-BaseDetection/YOLOX /YOLOX
+WORKDIR /YOLOX
+RUN python3 -m venv venv
+RUN /bin/bash -c "source /YOLOX/venv/bin/activate && pip install -U pip setuptools"
+RUN /bin/bash -c "source /YOLOX/venv/bin/activate && pip install torch torchvision torchaudio"
+RUN /bin/bash -c "source /YOLOX/venv/bin/activate && pip install --no-build-isolation -v -e ."
+
+WORKDIR /work
+
 CMD ["bash"]

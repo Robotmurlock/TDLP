@@ -1,0 +1,19 @@
+defaults:
+  - transform: scaled_bbox_keypoints.yaml
+  - augmentations: default.yaml
+  - feature_extractor: pred_appearance.yaml
+
+index:
+  type: mot
+  params:
+    paths:
+      - /media/home/DanceTrack-orig/
+
+n_tracks: 40
+clip_length: 50
+min_clip_tracks: 1
+clip_sampling_step: 1
+val_clip_sampling_step: 1
+
+sampler: null
+use_batch_sampler: false

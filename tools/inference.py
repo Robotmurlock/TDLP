@@ -415,7 +415,7 @@ def main(cfg: GlobalConfig) -> None:
         model=model,
         extra_features_reader=extra_features_reader,
         device=cfg.resources.accelerator,
-        remember_threshold=30,
+        remember_threshold=50,
         use_conf=True,
         sim_threshold=0.5
     )

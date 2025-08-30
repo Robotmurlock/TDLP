@@ -43,14 +43,14 @@ def main(cfg: GlobalConfig) -> None:
 
     for i in tqdm(range(n_samples), unit='sample', desc='Calculating bbox statistics', total=n_samples):
         data = train_dataset.get_raw(i)
-        observed_bboxes = data.observed_bboxes[~data.observed_temporal_mask]
-        unobserved_bboxes = data.unobserved_bboxes[~data.unobserved_temporal_mask]
+        observed_bboxes = data.observed.features['bbox'][~data.observed.mask]
+        unobserved_bboxes = data.unobserved.features['bbox'][~data.unobserved.mask]
         bboxes = torch.cat([observed_bboxes, unobserved_bboxes], dim=0)
 
-        fod = torch.zeros_like(data.observed_bboxes)
-        fod[:, 1:, :] = data.observed_bboxes[:, 1:, :] - data.observed_bboxes[:, :-1, :]
-        fod[:, 1:, :] = fod[:, 1:, :] * (1 - data.observed_temporal_mask[:, :-1].unsqueeze(-1).repeat(1, 1, data.observed_bboxes.shape[-1]).float())
-        fod = fod[~data.observed_temporal_mask]
+        fod = torch.zeros_like(data.observed.features['bbox'])
+        fod[:, 1:, :] = data.observed.features['bbox'][:, 1:, :] - data.observed.features['bbox'][:, :-1, :]
+        fod[:, 1:, :] = fod[:, 1:, :] * (1 - data.observed.mask[:, :-1].unsqueeze(-1).repeat(1, 1, data.observed.features['bbox'].shape[-1]).float())
+        fod = fod[~data.observed.mask]
 
         bboxes_sum = bboxes.sum(dim=0)
         bboxes_sum2 = torch.square(bboxes).sum(dim=0)
