@@ -33,3 +33,15 @@ aggregator_params:
   n_heads: 8
   n_layers: 2
   dropout: 0.1
+
+per_feature_checkpoint:
+  bbox: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp60-fromExp54-BBoxMem30/checkpoints/last.pt
+  keypoints: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp61-fromExp55-KeypointsMem30/checkpoints/last.pt
+  appearance: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp59-fromExp50-AppearanceMem30/checkpoints/last.pt
+
+object_interaction_encoder_enable: true
+object_interaction_encoder_params:
+  hidden_dim: ${model_config.mm_dim}
+  n_heads: 8
+  n_layers: 2
+  dropout: 0.1

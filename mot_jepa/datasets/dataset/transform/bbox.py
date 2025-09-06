@@ -131,6 +131,9 @@ class BBoxMinMaxScaling(Transform):
         super().__init__(name='bbox_min_max_scaling')
 
     def apply(self, data: VideoClipData) -> VideoClipData:
+        if 'bbox' not in data.observed.features and 'keypoints' not in data.observed.features:
+            return data
+
         bboxes_list: List[torch.Tensor] = []
         masks_list: List[torch.Tensor] = []
 

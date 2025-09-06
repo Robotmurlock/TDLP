@@ -1,0 +1,11 @@
+defaults:
+  - the_global_config
+  - resources: default.yaml
+  - dataset: dancetrack_appearance.yaml
+  - train: id.yaml
+  - eval: default.yaml
+  - model_config: mm_appearance.yaml
+  - path: default.yaml
+
+experiment_name: exp64a-fromExp63-4Layers
+dataset_name: DanceTrack

@@ -1,5 +1,5 @@
 max_epochs: 10
-gradient_clip: null
+gradient_clip: 1.0
 mixed_precision: true
 
 loss_config:
@@ -8,6 +8,7 @@ loss_config:
 optimizer_config:
   _target_: torch.optim.AdamW
   lr: 1e-4
+  weight_decay: 1e-2
 
 scheduler_config:
   _target_: mot_jepa.trainer.scheduler.create_warmup_cosine_annealing_scheduler

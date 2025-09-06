@@ -4,7 +4,7 @@ common_params:
   hidden_dim: 256
   dropout: 0.1
   track_encoder_n_heads: 8
-  track_encoder_n_layers: 2
+  track_encoder_n_layers: 4
   track_encoder_ffn_dim: 512
   projector_intermediate_dim: 512
   interaction_encoder_enable: true

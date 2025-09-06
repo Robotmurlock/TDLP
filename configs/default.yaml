@@ -1,11 +1,11 @@
 defaults:
   - the_global_config
   - resources: default.yaml
-  - dataset: dancetrack_bbox.yaml
-  - train: batch.yaml
+  - dataset: dancetrack.yaml
+  - train: mm.yaml
   - eval: default.yaml
-  - model_config: mm_bboxes.yaml
+  - model_config: mm_bboxes_keypoints_appearance.yaml
   - path: default.yaml
 
-experiment_name: exp56-fromExp54-KeepWH
+experiment_name: exp68-fromExp67-WeightDecay
 dataset_name: DanceTrack
