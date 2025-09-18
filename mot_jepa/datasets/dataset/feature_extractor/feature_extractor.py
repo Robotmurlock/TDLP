@@ -113,13 +113,13 @@ class FeatureExtractor(ABC):
                            f'Removing at random...')
             object_ids = object_ids[:self._n_tracks]
 
-        ts = torch.arange(start_time, start_time + temporal_length, dtype=torch.long) \
-            .unsqueeze(0).repeat(self._n_tracks, 1)
+        ts = torch.zeros(self._n_tracks, temporal_length, dtype=torch.long)
         ids = torch.full_like(ts, fill_value=-1)
         mask = torch.ones(self._n_tracks, temporal_length, dtype=torch.bool)
 
         for clip_index, frame_index in enumerate(range(start_index, end_index)):
             for object_index, object_id in enumerate(object_ids):
+                ts[object_index, clip_index] = frame_index
                 ids[object_index, clip_index] = self._object_id_mapping[object_id]
                 mask[object_index, clip_index] = False
 

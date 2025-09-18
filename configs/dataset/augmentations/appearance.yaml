@@ -1,0 +1,10 @@
+_target_: mot_jepa.datasets.dataset.augmentations.base.CompositionAugmentation
+augmentations:
+  - _target_: mot_jepa.datasets.dataset.augmentations.video.PointOcclusionAugmentations
+    drop_ratio: 0.3
+  - _target_: mot_jepa.datasets.dataset.augmentations.video.LeftOrRightOcclusionAugmentations
+    drop_ratio: 0.2
+  - _target_: mot_jepa.datasets.dataset.augmentations.video.IdentitySwitchAugmentation
+    switch_ratio: 0.3
+  - _target_: mot_jepa.datasets.dataset.augmentations.appearance.AppearanceNoiseAugmentation
+    alpha: 0.5

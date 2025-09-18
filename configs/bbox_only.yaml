@@ -1,0 +1,11 @@
+defaults:
+  - the_global_config
+  - resources: default.yaml
+  - dataset: dancetrack_bbox.yaml
+  - train: batch.yaml
+  - eval: default.yaml
+  - model_config: mm_bboxes.yaml
+  - path: default.yaml
+
+experiment_name: exp74b-fromExp73-HalvedLrDoubleEpochs
+dataset_name: DanceTrack

@@ -141,6 +141,9 @@ class SmartIdentitySwitchAugmentation(Augmentation):
         self._max_switch_ratio = max_switch_ratio
 
     def apply(self, data: VideoClipData) -> VideoClipData:
+        if 'bbox' not in data.observed.features:
+            return data
+        
         n_tracks, _ = data.observed.mask.shape
 
         candidate_matrix, candidate_pair_matrix = self._compute_switch_candidates(data)
@@ -229,17 +232,10 @@ class SmartIdentitySwitchAugmentation(Augmentation):
         return valid_timesteps.tolist()
 
     @staticmethod
-    def _switch(data, idx_a, idx_b, start_time):
-        _, clip_length = data.observed.mask.shape
-        switch_max_len = clip_length - start_time - 1
-        assert switch_max_len >= 0
-        if switch_max_len == 0:
-            return
-        swap_index = start_time + random.randint(1, switch_max_len)
-
+    def _switch(data, idx_a, idx_b, swap_index):
         for feature_key in data.observed.features:
             data.observed.features[feature_key][[idx_a, idx_b], swap_index] = data.observed.features[feature_key][[idx_b, idx_a], swap_index]
-            data.observed.mask[[idx_a, idx_b], swap_index] = data.observed.mask[[idx_b, idx_a], swap_index]
+        data.observed.mask[[idx_a, idx_b], swap_index] = data.observed.mask[[idx_b, idx_a], swap_index]
 
 
 def test_identity_switch_augmentation():

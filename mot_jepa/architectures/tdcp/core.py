@@ -1,7 +1,6 @@
 """Core TDCP model combining track and detection encoders."""
 
 import copy
-import random
 from typing import List, Tuple, Optional, Dict, Any, Set
 
 import torch
@@ -13,6 +12,9 @@ from mot_jepa.architectures.tdcp.feature_encoders import feature_encoder_factory
 from mot_jepa.architectures.tdcp.object_interaction_encoder import ObjectInteractionEncoder
 from mot_jepa.architectures.tdcp.projector import TrackToDetectionProjector
 from mot_jepa.architectures.tdcp.track_encoder import TrackEncoder
+import logging
+
+logger = logging.getLogger('Architecture')
 
 
 class TrackDetectionContrastivePrediction(nn.Module):
@@ -78,7 +80,10 @@ class TrackDetectionContrastivePrediction(nn.Module):
         if self._object_interaction_encoder is not None:
             agg_track_mask = track_mask.all(dim=-1)
             projected_features, det_features = self._object_interaction_encoder(
-                projected_features, agg_track_mask, det_features, det_mask
+                projected_features, 
+                agg_track_mask, 
+                det_features, 
+                det_mask
             )
 
         return projected_features, det_features
@@ -90,66 +95,27 @@ class MultiModalTDCP(nn.Module):
         tdcps: Dict[str, TrackDetectionContrastivePrediction],
         mm_dim: int,
         aggregator: TDCPAggregator,
-        drop_mm_probas: Optional[Dict[str, float]] = None
+        object_interaction_encoder: Optional[ObjectInteractionEncoder] = None
     ):
         super().__init__()
         self._tdcps = nn.ModuleDict(tdcps)
-        self._mm_linear_layers = nn.ModuleList([nn.Linear(tdcp.output_dim, mm_dim) for tdcp in tdcps.values()])
+        self._mm_linear_layers = nn.ModuleList([
+            nn.Linear(tdcp.output_dim, mm_dim)
+            for tdcp in tdcps.values()
+        ])
         self._aggregator = aggregator
-        self._drop_mm_probas = drop_mm_probas
-
-        if self._drop_mm_probas is not None:
-            assert set(self._drop_mm_probas.keys()) == set(self._tdcps.keys()), \
-                f'drop_mm_probas keys must match tdcps keys. Got {set(self._drop_mm_probas.keys())} and {set(self._tdcps.keys())}'
+        self._object_interaction_encoder = object_interaction_encoder
 
     @property
     def feature_names(self) -> Set[str]:
         return set(self._tdcps.keys())
-
-    def _drop_mm_tokens(self, mm_track_features: List[torch.Tensor], mm_det_features: List[torch.Tensor]) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
-        """
-        Apply token dropping to multimodal features during training.
-        
-        Args:
-            mm_track_features: List of track feature tensors
-            mm_det_features: List of detection feature tensors
-            
-        Returns:
-            Tuple of (modified_track_features, modified_det_features)
-        """
-        # Skip dropping during evaluation
-        if not self.training or self._drop_mm_probas is None:
-            return mm_track_features, mm_det_features
-
-        # Generate drop flags for each modality
-        feature_names = list(self._tdcps.keys())
-        drop_flags: List[bool] = []
-        for feature_name in feature_names:
-            flag = random.random() < self._drop_mm_probas[feature_name]
-            drop_flags.append(flag)
-
-        # edge-case: If all drop flags are True, return original features
-        if all(drop_flags):
-            return mm_track_features, mm_det_features
-
-        # Apply dropping to each modality
-        filtered_track_features = []
-        filtered_det_features = []
-        for i, (feature_name, track_feat, det_feat) in enumerate(zip(feature_names, mm_track_features, mm_det_features)):
-            if not drop_flags[i]:
-                filtered_track_features.append(track_feat)
-                filtered_det_features.append(det_feat)
-        
-        return filtered_track_features, filtered_det_features 
-        
-
 
     def forward(
         self,
         track_features: Dict[str, torch.Tensor],
         track_mask: torch.Tensor,
         det_features: Dict[str, torch.Tensor],
-        det_mask: torch.Tensor
+        det_mask: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
         assert set(track_features.keys()) == set(det_features.keys()) == set(self._tdcps.keys())
 
@@ -158,14 +124,22 @@ class MultiModalTDCP(nn.Module):
                 track_x=track_features[key],
                 track_mask=track_mask,
                 det_x=det_features[key],
-                det_mask=det_mask
+                det_mask=det_mask,
             )
 
         mm_track_features = [lin_layer(mm_feat) for lin_layer, mm_feat in zip(self._mm_linear_layers, list(track_features.values()))]
         mm_det_features = [lin_layer(mm_feat) for lin_layer, mm_feat in zip(self._mm_linear_layers, list(det_features.values()))]
-        mm_track_features, mm_det_features = self._drop_mm_tokens(mm_track_features, mm_det_features)
         agg_track_features = self._aggregator(mm_track_features)
         agg_det_features = self._aggregator(mm_det_features)
+
+        if self._object_interaction_encoder is not None:
+            agg_track_mask = track_mask.all(dim=-1)
+            agg_track_features, agg_det_features = self._object_interaction_encoder(
+                agg_track_features, 
+                agg_track_mask, 
+                agg_det_features, 
+                det_mask
+            )
 
         return agg_track_features, agg_det_features, track_features, det_features
 
@@ -250,23 +224,43 @@ def build_mm_tdcp_model(
     mm_dim: int,
     aggregator_type: str,
     aggregator_params: Dict[str, Any],
-    drop_mm_probas: Optional[Dict[str, float]] = None
+    per_feature_checkpoint: Optional[Dict[str, str]] = None,
+    object_interaction_encoder_enable: bool = False,
+    object_interaction_encoder_params: Optional[Dict[str, Any]] = None
 ) -> MultiModalTDCP:
+    per_feature_checkpoint = per_feature_checkpoint or {}
+
     tdcps: Dict[str, TrackDetectionContrastivePrediction] = {}
     for feature_name in per_feature_params:
         params = tdcp_utils.merge_configs(common_params, per_feature_params[feature_name])
         tdcps[feature_name] = build_tdcp_model(**params)
+        if feature_name in per_feature_checkpoint:
+            logger.info(f'Loading checkpoint for {feature_name} from {per_feature_checkpoint[feature_name]}')
+            state_dict = torch.load(per_feature_checkpoint[feature_name])['model']
+            state_dict = {
+                k.replace(f'_tdcps.{feature_name}.', ''): v 
+                for k, v in state_dict.items()
+            }
+            state_dict = {k: v for k, v in state_dict.items() if not k.startswith('_mm_linear_layers.')}
+            tdcps[feature_name].load_state_dict(state_dict)
 
     aggregator = tdcp_aggregator_factory(
         aggregator_type=aggregator_type,
         aggregator_params=aggregator_params,
         n_features=len(per_feature_params)
     )
+
+    if object_interaction_encoder_enable:
+        assert object_interaction_encoder_params is not None
+        object_interaction_encoder = ObjectInteractionEncoder(**object_interaction_encoder_params)
+    else:
+        object_interaction_encoder = None
+
     return MultiModalTDCP(
         tdcps=tdcps,
         aggregator=aggregator,
         mm_dim=mm_dim,
-        drop_mm_probas=drop_mm_probas
+        object_interaction_encoder=object_interaction_encoder
     )
 
 

@@ -30,6 +30,10 @@ from mot_jepa.datasets.dataset.motrack import MotrackDatasetWrapper
 from mot_jepa.datasets.dataset.transform import Transform
 from mot_jepa.utils import pipeline
 from mot_jepa.utils.extra_features import ExtraFeaturesReader
+import logging
+
+
+logger = logging.getLogger('Inference')
 
 
 
@@ -70,99 +74,6 @@ class MyTracker(Tracker):
 
         self._next_id = 0
         self._use_conf = use_conf
-
-    def _association(
-        self,
-        tracklets: List[Tracklet],
-        objects_data: List[dict],
-        frame_index: int
-    ) -> Tuple[List[Tuple[int, int]], List[int], List[int]]:
-        n_tracks = len(tracklets)
-        n_detections = len(objects_data)
-        if n_tracks == 0:
-            return [], [], list(range(n_detections))
-        elif n_detections == 0:
-            return [], list(range(n_tracks)), []
-
-        data = self._convert_data(tracklets, objects_data, frame_index)
-        data = self._transform(data)
-        data.apply(lambda x: x.unsqueeze(0).to(self._device))
-        track_mm_features, det_mm_features, track_all_features, det_all_features = self._model(
-            data.observed.features,
-            data.observed.mask,
-            data.unobserved.features,
-            data.unobserved.mask
-        )
-        track_mm_features = track_mm_features[0].cpu()
-        det_mm_features = det_mm_features[0].cpu()
-        track_mm_features = F.normalize(track_mm_features, dim=-1)
-        det_mm_features = F.normalize(det_mm_features, dim=-1)
-
-        cost_matrix = (track_mm_features[:n_tracks] @ det_mm_features[:n_detections].T).numpy()
-        cost_matrix = 1 - (cost_matrix + 1) / 2 # [-1, 1] -> [0, 1]
-        cost_matrix[cost_matrix > self._sim_threshold] = np.inf
-
-        return hungarian(cost_matrix)
-
-    def track(self,
-        tracklets: List[Tracklet],
-        detections: List[PredBBox],
-        frame_index: int,
-        frame: Optional[np.ndarray] = None
-    ) -> List[Tracklet]:
-        _, _ = frame, detections  # Ignored (for now)
-        scene_name = self.get_scene()
-        objects_data = self._extra_features_reader.read(scene_name, frame_index)
-        objects_data = [data for data in objects_data if data['bbox_conf'] > 0.4]
-        detections = [PredBBox.create(BBox.from_xywh(*data['bbox_xywh']), label='pedestrian', conf=data['bbox_conf']) for data in objects_data]
-
-        # Remove deleted
-        tracklets = [t for t in tracklets if t.state != TrackletState.DELETED]
-        matches, unmatched_tracklets, unmatched_detections = self._association(tracklets, objects_data, frame_index)
-
-        # Handle matches
-        for t_i, d_i in matches:
-            tracklet = tracklets[t_i]
-            detection = detections[d_i]
-            data = objects_data[d_i]
-
-            new_state = TrackletState.ACTIVE
-            if tracklet.state == TrackletState.NEW and tracklet.total_matches + 1 < self._initialization_threshold:
-                new_state = TrackletState.NEW
-            tracklet.update(detection, frame_index, state=new_state, frame_data=data)
-
-        # Handle unmatched tracklets
-        for t_i in unmatched_tracklets:
-            tracklet = tracklets[t_i]
-
-            if tracklet.lost_time > self._remember_threshold or tracklet.age < 3:
-                tracklet.state = TrackletState.DELETED
-            else:
-                tracklet.state = TrackletState.LOST
-
-        # Handle unmatched detections
-        new_tracklets: List[Tracklet] = []
-        for d_i in unmatched_detections:
-            detection = detections[d_i]
-            data = objects_data[d_i]
-
-            if self._new_tracklet_detection_threshold is not None and detection.conf < self._new_tracklet_detection_threshold:
-                continue
-
-            new_tracklet = Tracklet(
-                bbox=copy.deepcopy(detection),
-                frame_index=frame_index,
-                _id=self._next_id,
-                state=TrackletState.NEW if frame_index > self._initialization_threshold else TrackletState.ACTIVE,
-                max_history=self._clip_length - 1,
-                frame_data=data
-            )
-            self._next_id += 1
-            new_tracklets.append(new_tracklet)
-
-        tracklets.extend(new_tracklets)
-
-        return tracklets
 
     def _convert_data(
         self,
@@ -243,6 +154,114 @@ class MyTracker(Tracker):
             )
         )
 
+    def _association(
+        self,
+        tracklets: List[Tracklet],
+        objects_data: List[dict],
+        frame_index: int,
+        sim_threshold: float
+    ) -> Tuple[List[Tuple[int, int]], List[int], List[int]]:
+        n_tracks = len(tracklets)
+        n_detections = len(objects_data)
+        if n_tracks == 0:
+            return [], [], list(range(n_detections))
+        elif n_detections == 0:
+            return [], list(range(n_tracks)), []
+
+        data = self._convert_data(tracklets, objects_data, frame_index)
+        data = self._transform(data)
+        data.apply(lambda x: x.unsqueeze(0).to(self._device))
+        track_mm_features, det_mm_features, _, _ = self._model(
+            data.observed.features,
+            data.observed.mask,
+            data.unobserved.features,
+            data.unobserved.mask
+        )
+        track_mm_features = track_mm_features[0][:n_tracks]
+        det_mm_features = det_mm_features[0][:n_detections]
+        track_mm_features = F.normalize(track_mm_features, dim=-1).cpu()
+        det_mm_features = F.normalize(det_mm_features, dim=-1).cpu()
+
+        ALPHA = 0.65
+        if ALPHA > 0.0:
+            ema_track_mm_features = torch.zeros_like(track_mm_features)
+            for t_i in range(track_mm_features.shape[0]):
+                tracklet = tracklets[t_i]
+                track_ema = tracklet.get('track_ema')
+                if track_ema is None:
+                    ema_track_mm_features[t_i] = track_mm_features[t_i]
+                else:
+                    ema_track_mm_features[t_i] = ALPHA * track_ema + (1 - ALPHA) * track_mm_features[t_i]
+                    ema_track_mm_features[t_i] = F.normalize(ema_track_mm_features[t_i], dim=-1)
+                tracklet.set('track_ema', ema_track_mm_features[t_i])
+        else:
+            ema_track_mm_features = track_mm_features
+
+        cost_matrix = (ema_track_mm_features @ det_mm_features.T).numpy()
+        cost_matrix = 1 - (cost_matrix + 1) / 2 # [-1, 1] -> [0, 1]
+        cost_matrix[cost_matrix > sim_threshold] = np.inf
+
+        return hungarian(cost_matrix)
+
+    def track(self,
+        tracklets: List[Tracklet],
+        detections: List[PredBBox],
+        frame_index: int,
+        frame: Optional[np.ndarray] = None
+    ) -> List[Tracklet]:
+        _, _ = frame, detections  # Ignored (for now)
+        scene_name = self.get_scene()
+        objects_data = self._extra_features_reader.read(scene_name, frame_index)
+        objects_data = [data for data in objects_data if data['bbox_conf'] > 0.4]
+        detections = [PredBBox.create(BBox.from_xywh(*data['bbox_xywh']), label='pedestrian', conf=data['bbox_conf']) for data in objects_data]
+
+        # Remove deleted
+        tracklets = [t for t in tracklets if t.state != TrackletState.DELETED]
+        matches, unmatched_tracklets, unmatched_detections = self._association(tracklets, objects_data, frame_index, sim_threshold=self._sim_threshold)
+
+        # Handle matches
+        for t_i, d_i in matches:
+            tracklet = tracklets[t_i]
+            detection = detections[d_i]
+            data = objects_data[d_i]
+
+            new_state = TrackletState.ACTIVE
+            if tracklet.state == TrackletState.NEW and tracklet.total_matches + 1 < self._initialization_threshold:
+                new_state = TrackletState.NEW
+            tracklet.update(detection, frame_index, state=new_state, frame_data=data)
+
+        # Handle unmatched tracklets
+        for t_i in unmatched_tracklets:
+            tracklet = tracklets[t_i]
+
+            if tracklet.lost_time > self._remember_threshold or tracklet.age < 3:
+                tracklet.state = TrackletState.DELETED
+            else:
+                tracklet.state = TrackletState.LOST
+
+        # Handle unmatched detections
+        new_tracklets: List[Tracklet] = []
+        for d_i in unmatched_detections:
+            detection = detections[d_i]
+            data = objects_data[d_i]
+
+            if self._new_tracklet_detection_threshold is not None and detection.conf < self._new_tracklet_detection_threshold:
+                continue
+
+            new_tracklet = Tracklet(
+                bbox=copy.deepcopy(detection),
+                frame_index=frame_index,
+                _id=self._next_id,
+                state=TrackletState.NEW if frame_index > self._initialization_threshold else TrackletState.ACTIVE,
+                max_history=self._clip_length - 1,
+                frame_data=data
+            )
+            self._next_id += 1
+            new_tracklets.append(new_tracklet)
+
+        tracklets.extend(new_tracklets)
+
+        return tracklets
 
 # class MyByteTracker(MyTracker):
 #     def __init__(
@@ -377,6 +396,7 @@ def main(cfg: GlobalConfig) -> None:
     )
 
     model = cfg.build_model()
+    logger.info(f'Loading model from {cfg.eval.checkpoint}.')
     state_dict = torch.load(cfg.eval.checkpoint)
     model.load_state_dict(state_dict['model'])
 
@@ -417,7 +437,9 @@ def main(cfg: GlobalConfig) -> None:
         device=cfg.resources.accelerator,
         remember_threshold=30,
         use_conf=True,
-        sim_threshold=0.5
+        sim_threshold=0.90,
+        initialization_threshold=1,
+        new_tracklet_detection_threshold=0.9
     )
 
     scene_names = dataset_index.scenes

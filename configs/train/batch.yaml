@@ -1,0 +1,6 @@
+defaults:
+  - base.yaml
+  - _self_
+
+loss_config:
+  _target_: mot_jepa.trainer.losses.infonce.BatchLevelInfoNCE

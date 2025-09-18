@@ -62,7 +62,7 @@ class MOTDatasetIndex(DatasetIndex):
         sequence_list: Optional[List[str]] = None,
         label_type: LabelType = LabelType.GROUND_TRUTH,
         skip_corrupted: bool = False,
-        test: bool = False
+        test: bool = True
     ) -> None:
         """
         Args:
@@ -335,7 +335,7 @@ class MOTDatasetIndex(DatasetIndex):
         n_labels = 0
         if test:
             # Return empty labels
-            return data, n_labels
+            return data, present_object_ids, n_labels
 
         for scene_name, scene_info in tqdm(scene_infos.items(), unit='scene', total=len(scene_infos), desc=f'Indexing'):
             scene_info = self._scene_info_index[scene_name]

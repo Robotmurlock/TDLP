@@ -1,5 +1,5 @@
 _target_: mot_jepa.architectures.tdcp.core.build_mm_tdcp_model
-mm_dim: 256
+mm_dim: 512
 common_params:
   hidden_dim: 256
   dropout: 0.1
@@ -12,9 +12,12 @@ common_params:
   interaction_encoder_n_layers: 2
   interaction_encoder_ffn_dim: 512
 per_feature_params:
-  bbox:
-    feature_encoder_type: motion
+  appearance:
+    hidden_dim: 512
+    feature_encoder_type: parts_appearance
     feature_encoder_params:
-      input_dim: 5
+      emb_size: 128
+      hidden_dim: 512
+    track_encoder_enable_motion_encoder: false
 aggregator_type: sum
 aggregator_params: {}

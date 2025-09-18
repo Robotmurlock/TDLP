@@ -27,12 +27,21 @@ per_feature_params:
       emb_size: 128
       hidden_dim: 512
     track_encoder_enable_motion_encoder: false
-aggregator_type: query
+aggregator_type: transformer
 aggregator_params:
   hidden_dim: ${model_config.mm_dim}
-  num_heads: 8
+  n_heads: 8
+  n_layers: 2
+  dropout: 0.1
 
-drop_mm_probas:
-  bbox: 0.1
-  keypoints: 0.1
-  appearance: 0.4
+per_feature_checkpoint:
+  bbox: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp74b-fromExp73-HalvedLrDoubleEpochs/checkpoints/last.pt
+  keypoints: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp74k-fromExp73-HalvedLrDoubleEpochs/checkpoints/last.pt
+  appearance: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp74a-fromExp73-HalvedLrDoubleEpochs/checkpoints/last.pt
+
+object_interaction_encoder_enable: true
+object_interaction_encoder_params:
+  hidden_dim: ${model_config.mm_dim}
+  n_heads: 8
+  n_layers: 2
+  dropout: 0.1

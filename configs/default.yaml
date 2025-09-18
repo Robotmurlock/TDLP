@@ -2,10 +2,10 @@ defaults:
   - the_global_config
   - resources: default.yaml
   - dataset: dancetrack.yaml
-  - train: default.yaml
+  - train: mm.yaml
   - eval: default.yaml
   - model_config: mm_bboxes_keypoints_appearance.yaml
   - path: default.yaml
 
-experiment_name: exp44-fromExp41-BiggerAppearanceHiddenDim
+experiment_name: exp74-fromExp73-HalvedLrDoubleEpochs
 dataset_name: DanceTrack
