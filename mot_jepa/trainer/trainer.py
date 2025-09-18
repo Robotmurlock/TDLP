@@ -231,14 +231,14 @@ class ContrastiveTrainer:
 
         with autocast(enabled=self._mixed_precision):
             model_output = self._model(track_x, track_mask, det_x, det_mask)
-            if isinstance(model_output, tuple) and len(model_output) == 4:
+            if len(model_output) == 4:
                 track_features, det_features, track_feat_dict, det_feat_dict = model_output
             else:
                 track_features, det_features = model_output
                 track_feat_dict = None
                 det_feat_dict = None
 
-            return self._loss_func(
+            loss_dict = self._loss_func(
                 track_features,
                 det_features,
                 track_mask,
@@ -248,6 +248,8 @@ class ContrastiveTrainer:
                 track_ids,
                 det_ids
             )
+
+            return loss_dict
 
     def _train_epoch(self, train_loader: 'DataLoader') -> Dict[str, float]:
         """

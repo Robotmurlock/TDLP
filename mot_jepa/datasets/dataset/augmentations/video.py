@@ -141,6 +141,9 @@ class SmartIdentitySwitchAugmentation(Augmentation):
         self._max_switch_ratio = max_switch_ratio
 
     def apply(self, data: VideoClipData) -> VideoClipData:
+        if 'bbox' not in data.observed.features:
+            return data
+        
         n_tracks, _ = data.observed.mask.shape
 
         candidate_matrix, candidate_pair_matrix = self._compute_switch_candidates(data)

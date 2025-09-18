@@ -80,7 +80,10 @@ class TrackDetectionContrastivePrediction(nn.Module):
         if self._object_interaction_encoder is not None:
             agg_track_mask = track_mask.all(dim=-1)
             projected_features, det_features = self._object_interaction_encoder(
-                projected_features, agg_track_mask, det_features, det_mask
+                projected_features, 
+                agg_track_mask, 
+                det_features, 
+                det_mask
             )
 
         return projected_features, det_features
@@ -112,7 +115,7 @@ class MultiModalTDCP(nn.Module):
         track_features: Dict[str, torch.Tensor],
         track_mask: torch.Tensor,
         det_features: Dict[str, torch.Tensor],
-        det_mask: torch.Tensor
+        det_mask: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
         assert set(track_features.keys()) == set(det_features.keys()) == set(self._tdcps.keys())
 
@@ -121,7 +124,7 @@ class MultiModalTDCP(nn.Module):
                 track_x=track_features[key],
                 track_mask=track_mask,
                 det_x=det_features[key],
-                det_mask=det_mask
+                det_mask=det_mask,
             )
 
         mm_track_features = [lin_layer(mm_feat) for lin_layer, mm_feat in zip(self._mm_linear_layers, list(track_features.values()))]
@@ -132,7 +135,10 @@ class MultiModalTDCP(nn.Module):
         if self._object_interaction_encoder is not None:
             agg_track_mask = track_mask.all(dim=-1)
             agg_track_features, agg_det_features = self._object_interaction_encoder(
-                agg_track_features, agg_track_mask, agg_det_features, det_mask
+                agg_track_features, 
+                agg_track_mask, 
+                agg_det_features, 
+                det_mask
             )
 
         return agg_track_features, agg_det_features, track_features, det_features

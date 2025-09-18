@@ -7,5 +7,5 @@ defaults:
   - model_config: mm_keypoints.yaml
   - path: default.yaml
 
-experiment_name: exp64k-fromExp63-4Layers
+experiment_name: exp74k-fromExp73-HalvedLrDoubleEpochs
 dataset_name: DanceTrack

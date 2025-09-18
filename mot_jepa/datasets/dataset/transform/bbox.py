@@ -103,7 +103,8 @@ class FeatureFODStandardization(Transform):
                     if features_n.shape[0] == 0:
                         continue
 
-                    features_n[1:, :] = (features_n[1:, :] - features_n[:-1, :]) / (ts_n[1:, :] - ts_n[:-1, :])
+                    ts_diff = torch.clamp(ts_n[1:, :] - ts_n[:-1, :], min=1)
+                    features_n[1:, :] = (features_n[1:, :] - features_n[:-1, :]) / (ts_diff)
                     features_n[0, :] = 0
                     fod[n][~mask[n]] = features_n
             else:

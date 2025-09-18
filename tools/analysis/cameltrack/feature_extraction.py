@@ -172,7 +172,8 @@ def add_track_ids(pred_frame_data: List[dict], gt_frame_data: List[FrameObjectDa
 @pipeline.task('cameltrack-features-extraction')
 def main(cfg: GlobalConfig) -> None:
     # Hardcoded stuff
-    SPLIT = 'val'
+    SPLIT = 'test'
+    is_test = (SPLIT == 'test')
     CAMELTRACK_STATES_PATH = f'/media/home/cameltrack-states/dancetrack-{SPLIT}.pklz'
     TEMPORARY_DIRPATH = '/media/home/cameltrack-states/tmp'
     EXTRACTED_OUTPUT_PATH = '/media/home/cameltrack-states/extracted-features'
@@ -194,14 +195,18 @@ def main(cfg: GlobalConfig) -> None:
         for scene_name in tqdm(scenes, desc='Parsing extra features', unit='scene'):
             scene_info = dataset_index.get_scene_info(scene_name)
             for frame_index in range(scene_info.seqlength):
-                object_ids = dataset_index.get_objects_present_in_scene_at_frame(scene_name, frame_index)  # TODO: Check if +1 is needed
-                gt_frame_data = [dataset_index.get_object_data_label_by_frame_index(object_id, frame_index) for object_id in object_ids]  # TODO: Check if +1 is needed
-
                 pred_frame_data = parser.get(scene_name, frame_index)
                 pred_frame_data = postprocess_data(scene_info, pred_frame_data)
-                pred_frame_data, n_matches, n_unmatches = add_track_ids(pred_frame_data, gt_frame_data)
-                n_total_matches += n_matches
-                n_total_unmatches += n_unmatches
+
+                if not is_test:
+                    object_ids = dataset_index.get_objects_present_in_scene_at_frame(scene_name, frame_index)
+                    gt_frame_data = [dataset_index.get_object_data_label_by_frame_index(object_id, frame_index) for object_id in object_ids]
+                    pred_frame_data, n_matches, n_unmatches = add_track_ids(pred_frame_data, gt_frame_data)
+                    n_total_matches += n_matches
+                    n_total_unmatches += n_unmatches
+                else:
+                    n_total_matches += 0
+                    n_total_unmatches += 0
 
                 features_writer.write(scene_name, frame_index, pred_frame_data)
 

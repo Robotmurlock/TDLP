@@ -177,12 +177,27 @@ class MyTracker(Tracker):
             data.unobserved.features,
             data.unobserved.mask
         )
-        track_mm_features = track_mm_features[0].cpu()
-        det_mm_features = det_mm_features[0].cpu()
-        track_mm_features = F.normalize(track_mm_features, dim=-1)
-        det_mm_features = F.normalize(det_mm_features, dim=-1)
+        track_mm_features = track_mm_features[0][:n_tracks]
+        det_mm_features = det_mm_features[0][:n_detections]
+        track_mm_features = F.normalize(track_mm_features, dim=-1).cpu()
+        det_mm_features = F.normalize(det_mm_features, dim=-1).cpu()
 
-        cost_matrix = (track_mm_features[:n_tracks] @ det_mm_features[:n_detections].T).numpy()
+        ALPHA = 0.65
+        if ALPHA > 0.0:
+            ema_track_mm_features = torch.zeros_like(track_mm_features)
+            for t_i in range(track_mm_features.shape[0]):
+                tracklet = tracklets[t_i]
+                track_ema = tracklet.get('track_ema')
+                if track_ema is None:
+                    ema_track_mm_features[t_i] = track_mm_features[t_i]
+                else:
+                    ema_track_mm_features[t_i] = ALPHA * track_ema + (1 - ALPHA) * track_mm_features[t_i]
+                    ema_track_mm_features[t_i] = F.normalize(ema_track_mm_features[t_i], dim=-1)
+                tracklet.set('track_ema', ema_track_mm_features[t_i])
+        else:
+            ema_track_mm_features = track_mm_features
+
+        cost_matrix = (ema_track_mm_features @ det_mm_features.T).numpy()
         cost_matrix = 1 - (cost_matrix + 1) / 2 # [-1, 1] -> [0, 1]
         cost_matrix[cost_matrix > sim_threshold] = np.inf
 
@@ -422,7 +437,7 @@ def main(cfg: GlobalConfig) -> None:
         device=cfg.resources.accelerator,
         remember_threshold=30,
         use_conf=True,
-        sim_threshold=0.85,
+        sim_threshold=0.90,
         initialization_threshold=1,
         new_tracklet_detection_threshold=0.9
     )

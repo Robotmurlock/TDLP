@@ -60,7 +60,6 @@ class ObjectInteractionEncoder(nn.Module):
             Tuple ``(track_features, detection_features)`` with updated
             representations after self-attention.
         """
-
         N = track_x.shape[1]
 
         x = torch.cat([track_x, det_x], dim=1)

@@ -7,5 +7,5 @@ defaults:
   - model_config: mm_appearance.yaml
   - path: default.yaml
 
-experiment_name: exp64a-fromExp63-4Layers
+experiment_name: exp74a-fromExp73-HalvedLrDoubleEpochs
 dataset_name: DanceTrack

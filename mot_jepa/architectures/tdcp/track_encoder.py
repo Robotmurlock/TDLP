@@ -94,8 +94,7 @@ class TrackEncoder(nn.Module):
         Returns:
             Tensor of shape ``(B, N, D)`` representing encoded tracks.
         """
-
-        B, N, T, D = x.shape  # batch, objects, temporal, dim
+        B, N, _, _ = x.shape  # batch, objects, temporal, dim
 
         # Tokenize
         x = einops.rearrange(x, 'b n t e -> t (b n) e')

@@ -7,5 +7,5 @@ defaults:
   - model_config: mm_bboxes_keypoints_appearance.yaml
   - path: default.yaml
 
-experiment_name: exp68-fromExp67-WeightDecay
+experiment_name: exp74-fromExp73-HalvedLrDoubleEpochs
 dataset_name: DanceTrack
