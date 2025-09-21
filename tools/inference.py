@@ -25,7 +25,7 @@ from mot_jepa.common.project import CONFIGS_PATH
 from mot_jepa.config_parser import GlobalConfig
 from mot_jepa.datasets.dataset import dataset_index_factory
 from mot_jepa.datasets.dataset.common.data import VideoClipData, VideoClipPart
-from mot_jepa.datasets.dataset.feature_extractor.pred_bbox_feature_extractor import PredictionBBoxFeatureExtractor
+from mot_jepa.datasets.dataset.feature_extractor.pred_bbox_feature_extractor import PredictionBBoxFeatureExtractor, SupportedFeatures
 from mot_jepa.datasets.dataset.motrack import MotrackDatasetWrapper
 from mot_jepa.datasets.dataset.transform import Transform
 from mot_jepa.utils import pipeline
@@ -62,7 +62,7 @@ class MyTracker(Tracker):
         self._model.to(device)
         self._model.eval()
 
-        self._feature_names = self._model.feature_names
+        self._feature_names = set([SupportedFeatures(feature_name) for feature_name in self._model.feature_names])
         self._extra_features_reader = extra_features_reader
 
         self._sim_threshold = sim_threshold
@@ -182,7 +182,7 @@ class MyTracker(Tracker):
         track_mm_features = F.normalize(track_mm_features, dim=-1).cpu()
         det_mm_features = F.normalize(det_mm_features, dim=-1).cpu()
 
-        ALPHA = 0.65
+        ALPHA = 0.0  # 0.65
         if ALPHA > 0.0:
             ema_track_mm_features = torch.zeros_like(track_mm_features)
             for t_i in range(track_mm_features.shape[0]):

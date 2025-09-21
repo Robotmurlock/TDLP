@@ -1,6 +1,7 @@
 import random
 from typing import Dict, List, Set
 
+import enum
 import torch
 
 from mot_jepa.datasets.dataset.common.data import VideoClipPart
@@ -9,11 +10,17 @@ from mot_jepa.datasets.dataset.index.index import DatasetIndex
 from mot_jepa.utils.extra_features import ExtraFeaturesReader
 
 
+class SupportedFeatures(enum.Enum):
+    BBOX = 'bbox'
+    KEYPOINTS = 'keypoints'
+    APPEARANCE = 'appearance'
+
+
 class PredictionBBoxFeatureExtractor(FeatureExtractor):
     BBOX_DIM = 5  # XYWHC
     KEYPOINTS_DIM = 35  # 17x2 XYC (per part) + 1 C (global) = 52
     APPEARANCE_DIM = 768  # 6x128
-    SUPPORTED_FEATURES = {'bbox', 'keypoints', 'appearance'}
+    SUPPORTED_FEATURES = {SupportedFeatures.BBOX, SupportedFeatures.KEYPOINTS, SupportedFeatures.APPEARANCE}
 
     WORKER_ID_STEP = 1_000_000
 
@@ -24,21 +31,27 @@ class PredictionBBoxFeatureExtractor(FeatureExtractor):
         n_tracks: int,
         prediction_path: str,
         feature_names: List[str],
-        extra_false_positives: bool = True
+        extra_false_positives: bool = True,
+        random_appearance_jitter_ratio: float = 0.0,
+        random_appearance_jitter_range: int = 0
     ):
         super().__init__(
             index=index,
             object_id_mapping=object_id_mapping,
             n_tracks=n_tracks
         )
-        feature_names = [feature_name.lower() for feature_name in feature_names]
+        feature_names = [SupportedFeatures(feature_name.lower()) for feature_name in feature_names]
         for feature_name in feature_names:
             assert feature_name in self.SUPPORTED_FEATURES, \
                 f'Unsupported feature "{feature_name}". Supported features: {self.SUPPORTED_FEATURES}'
 
         self._feature_names = set(feature_names)
         self._extra_features_reader = ExtraFeaturesReader(prediction_path)
+
+        # Augmentations
         self._extra_false_positives = extra_false_positives
+        self._random_appearance_jitter_ratio = random_appearance_jitter_ratio if index.split == 'train' else 0.0
+        self._random_appearance_jitter_range = random_appearance_jitter_range if index.split == 'train' else 0
 
         self._worker_id_counter = 0
 
@@ -57,27 +70,27 @@ class PredictionBBoxFeatureExtractor(FeatureExtractor):
         return torch.tensor([*bbox, score], dtype=torch.float32)
 
     @staticmethod
-    def initialize_features(feature_names: Set[str], n_tracks: int, temporal_length: int) -> Dict[str, torch.Tensor]:
+    def initialize_features(feature_names: Set[SupportedFeatures], n_tracks: int, temporal_length: int) -> Dict[str, torch.Tensor]:
         features: Dict[str, torch.Tensor] = {}
-        if 'bbox' in feature_names:
-            features['bbox'] = torch.zeros(n_tracks, temporal_length, PredictionBBoxFeatureExtractor.BBOX_DIM, dtype=torch.float32)
-        if 'keypoints' in feature_names:
-            features['keypoints'] = torch.zeros(n_tracks, temporal_length, PredictionBBoxFeatureExtractor.KEYPOINTS_DIM, dtype=torch.float32)
-        if 'appearance' in feature_names:
-            features['appearance'] = torch.zeros(n_tracks, temporal_length, PredictionBBoxFeatureExtractor.APPEARANCE_DIM, dtype=torch.float32)
+        if SupportedFeatures.BBOX in feature_names:
+            features[SupportedFeatures.BBOX.value] = torch.zeros(n_tracks, temporal_length, PredictionBBoxFeatureExtractor.BBOX_DIM, dtype=torch.float32)
+        if SupportedFeatures.KEYPOINTS in feature_names:
+            features[SupportedFeatures.KEYPOINTS.value] = torch.zeros(n_tracks, temporal_length, PredictionBBoxFeatureExtractor.KEYPOINTS_DIM, dtype=torch.float32)
+        if SupportedFeatures.APPEARANCE in feature_names:
+            features[SupportedFeatures.APPEARANCE.value] = torch.zeros(n_tracks, temporal_length, PredictionBBoxFeatureExtractor.APPEARANCE_DIM, dtype=torch.float32)
         return features
 
     @staticmethod
-    def _set_features(feature_names: Set[str], features: Dict[str, torch.Tensor], object_index: int, clip_index: int, data: dict) -> None:
-        if 'bbox' in feature_names:
+    def _set_features(feature_names: Set[SupportedFeatures], features: Dict[str, torch.Tensor], object_index: int, clip_index: int, data: dict) -> None:
+        if SupportedFeatures.BBOX in feature_names:
             bbox = [*data['bbox_xywh'], data['bbox_conf']]
-            features['bbox'][object_index, clip_index, :] = torch.tensor(bbox, dtype=torch.float32)
-        if 'keypoints' in feature_names:
+            features[SupportedFeatures.BBOX.value][object_index, clip_index, :] = torch.tensor(bbox, dtype=torch.float32)
+        if SupportedFeatures.KEYPOINTS in feature_names:
             keypoints = sum([d[:2] for d in data['keypoints_xyc']], []) + [data['keypoints_conf']]
-            features['keypoints'][object_index, clip_index, :] = torch.tensor(keypoints, dtype=torch.float32)
-        if 'appearance' in feature_names:
+            features[SupportedFeatures.KEYPOINTS.value][object_index, clip_index, :] = torch.tensor(keypoints, dtype=torch.float32)
+        if SupportedFeatures.APPEARANCE in feature_names:
             embs = [[e * float(visibility) for e in emb] for emb, visibility in zip(data['appearance_embeddings'], data['appearance_visibility'])]
-            features['appearance'][object_index, clip_index, :] = torch.tensor(sum(embs, []), dtype=torch.float32)
+            features[SupportedFeatures.APPEARANCE.value][object_index, clip_index, :] = torch.tensor(sum(embs, []), dtype=torch.float32)
 
     def _extract_extra_data(
         self,
@@ -123,6 +136,22 @@ class PredictionBBoxFeatureExtractor(FeatureExtractor):
                     self._worker_id_counter = (self._worker_id_counter + 1) % self.WORKER_ID_STEP
                     next_id = self.WORKER_ID_STEP * worker_id + self._worker_id_counter
                     video_clip_part.ids[object_index, clip_index] = next_id
+
+            if self._random_appearance_jitter_ratio > 0 and SupportedFeatures.APPEARANCE in self._feature_names:
+                scene_info = self._index.get_scene_info(scene_name)
+                jitter = random.randint(-self._random_appearance_jitter_range, self._random_appearance_jitter_range)
+                random_frame_index = max(0, min(scene_info.seqlength - 1, frame_index + jitter))
+                aug_extra_data = self._extra_features_reader.read(scene_name, random_frame_index)
+                aug_object_id_to_extra_data_lookup: Dict[str, dict] = {raw['object_id']: raw for raw in aug_extra_data if raw['object_id'] is not None}
+
+                for object_index, object_id in enumerate(object_ids):
+                    data = aug_object_id_to_extra_data_lookup.get(object_id)
+                    if data is None:
+                        continue
+
+                    r = random.random()
+                    if r < self._random_appearance_jitter_ratio:
+                        self._set_features([SupportedFeatures.APPEARANCE], features, object_index, clip_index, data)
 
         video_clip_part.features = features
         return video_clip_part
