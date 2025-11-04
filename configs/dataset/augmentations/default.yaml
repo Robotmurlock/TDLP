@@ -19,7 +19,7 @@ augmentations:
   - _target_: mot_jepa.datasets.dataset.augmentations.video.IdentitySwitchAugmentation
     switch_ratio: 0.3
   - _target_: mot_jepa.datasets.dataset.augmentations.appearance.AppearanceNoiseAugmentation
-    alpha: 0.5
+    alpha: 0.40
   - _target_: mot_jepa.datasets.dataset.augmentations.video.SmartIdentitySwitchAugmentation
     switch_ratio: 0.5
     iou_threshold: 0.5

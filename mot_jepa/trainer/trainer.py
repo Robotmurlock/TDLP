@@ -21,8 +21,13 @@ from torch.cuda.amp import GradScaler, autocast
 from mot_jepa.common.conventions import LAST_CKPT
 from mot_jepa.trainer import torch_distrib_utils
 from mot_jepa.trainer import torch_helper
-from mot_jepa.trainer.losses.base import VideoClipLoss
 from mot_jepa.trainer.metrics import LossDictMeter, AccuracyMeter
+from mot_jepa.architectures.tdcp.core import (
+    MultiModalTDCP, 
+    TrackDetectionContrastivePrediction, 
+    MultiModalTDSP, 
+    TrackDetectionSimilarityPrediction,
+)
 
 logger = logging.getLogger('Trainer')
 
@@ -33,7 +38,7 @@ class ContrastiveTrainer:
     def __init__(
         self,
         model: nn.Module,
-        loss_func: VideoClipLoss,
+        loss_func: nn.Module,
         optimizer: Optimizer,
         scheduler: LRScheduler,
         n_epochs: int,
@@ -42,7 +47,8 @@ class ContrastiveTrainer:
         metric_monitor: str = 'val-epoch/loss',
         metric_monitor_minimize: bool = True,
         gradient_clip: Optional[float] = None,
-        mixed_precision: bool = False
+        mixed_precision: bool = False,
+        device: Optional[str] = None
     ):
         """
         Args:
@@ -63,7 +69,7 @@ class ContrastiveTrainer:
         self._rank = int(os.environ.get('RANK', -1))
         self._local_rank = int(os.environ.get('LOCAL_RANK', -1))
         self._world_size = int(os.environ.get('WORLD_SIZE', 1))
-        self._device = f'cuda:{max(0, self._local_rank)}' if torch.cuda.is_available() else 'cpu'
+        self._device = self._setup_device(self._local_rank, device)
 
         # Trainer state
         self._model = model
@@ -92,6 +98,27 @@ class ContrastiveTrainer:
 
         # Finish
         self._log_trainer_configuration()
+
+    @staticmethod
+    def _setup_device(local_rank: int, device: Optional[str]) -> str:
+        """
+        Setup device.
+
+        Args:
+            local_rank: Local rank
+            device: Device to use
+
+        Returns:
+            Device
+        """
+        if local_rank == -1:
+            if device is None:
+                return f'cuda:0' if torch.cuda.is_available() else 'cpu'
+            else:
+                return device
+        else:
+            assert torch.cuda.is_available(), 'CUDA is not available!'
+            return f'cuda:{local_rank}'
 
     @property
     def model(self) -> Union[nn.Module, DDP]:
@@ -132,6 +159,7 @@ class ContrastiveTrainer:
         Pre-process code before a train/eval process.
         """
         self._model.to(self._device)
+        self._loss_func.to(self._device)
         torch_helper.optimizer_to(self._optimizer, device=self._device)
 
         if self._use_ddp:
@@ -231,23 +259,40 @@ class ContrastiveTrainer:
 
         with autocast(enabled=self._mixed_precision):
             model_output = self._model(track_x, track_mask, det_x, det_mask)
-            if len(model_output) == 4:
-                track_features, det_features, track_feat_dict, det_feat_dict = model_output
-            else:
-                track_features, det_features = model_output
-                track_feat_dict = None
-                det_feat_dict = None
+            # TODO: Refactor
+            if isinstance(self._model, (MultiModalTDCP, TrackDetectionContrastivePrediction)):
+                if isinstance(self._model, MultiModalTDCP):
+                    track_features, det_features, track_feat_dict, det_feat_dict = model_output
+                else:
+                    track_features, det_features = model_output
+                    track_feat_dict = None
+                    det_feat_dict = None
 
-            loss_dict = self._loss_func(
-                track_features,
-                det_features,
-                track_mask,
-                det_mask,
-                track_feat_dict,
-                det_feat_dict,
-                track_ids,
-                det_ids
-            )
+                loss_dict = self._loss_func(
+                    track_features,
+                    det_features,
+                    track_mask,
+                    det_mask,
+                    track_feat_dict,
+                    det_feat_dict,
+                    track_ids,
+                    det_ids
+                )
+            elif isinstance(self._model, (MultiModalTDSP, TrackDetectionSimilarityPrediction)):
+                if isinstance(self._model, MultiModalTDSP):
+                    logits, logits_dict = model_output
+                else:
+                    logits = model_output
+                    logits_dict = None
+
+                loss_dict = self._loss_func(
+                    logits,
+                    track_mask,
+                    det_mask,
+                    track_ids,
+                    det_ids,
+                    logits_dict
+                )
 
             return loss_dict
 
@@ -395,14 +440,7 @@ class ContrastiveTrainer:
         local_rank: Optional[int] = int(os.environ.get('LOCAL_RANK', self._local_rank))
 
         if local_rank == -1:
-            logger.info('Using single-GPU training mode.')
-
-            if torch.cuda.is_available():
-                logger.info('Using "cuda:0" (default) for single-GPU training.')
-                self._local_rank = 0
-            else:
-                logger.info('Using CPU for single-GPU training.')
-                self._local_rank = 'cpu'
+            logger.info(f'Using "{self._device}" for single-node training.')
         else:
             if not dist.is_initialized():
                 # Allows `_setup(model)` to be called multiple times with a different (or same) model

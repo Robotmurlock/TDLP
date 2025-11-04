@@ -2,10 +2,25 @@ defaults:
   - the_global_config
   - resources: default.yaml
   - dataset: dancetrack.yaml
-  - train: mm.yaml
+  - train: bce.yaml
   - eval: default.yaml
-  - model_config: mm_bboxes_keypoints_appearance.yaml
+  - model_config: mm_tdsp_bboxes_keypoints_appearance.yaml
   - path: default.yaml
 
-experiment_name: exp74-fromExp73-HalvedLrDoubleEpochs
+experiment_name: exp111-fromExp110-LinearSumDecoder
 dataset_name: DanceTrack
+
+resources:
+  batch_size: 8
+
+train:
+  max_epochs: 10
+
+  optimizer_config:
+    _target_: torch.optim.AdamW
+    lr: 1e-5
+    weight_decay: 1e-3
+
+  scheduler_config:
+    _target_: mot_jepa.trainer.scheduler.create_warmup_cosine_annealing_scheduler
+    n_warmup_epochs: 1

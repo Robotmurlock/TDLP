@@ -116,6 +116,7 @@ def main(cfg: GlobalConfig) -> None:
         logger.warning(f'Using "{cfg.train.checkpoint_cfg.resume_from}" as starting checkpoint.')
         state_dict = torch.load(cfg.train.checkpoint_cfg.resume_from)
         model.load_state_dict(state_dict['model'])
+    logger.info(f'Model:\n{model}')
 
     loss_func = cfg.train.build_loss_func()
     optimizer = cfg.train.build_optimizer(model.parameters())
@@ -137,6 +138,7 @@ def main(cfg: GlobalConfig) -> None:
         n_epochs=cfg.train.max_epochs,
         gradient_clip=cfg.train.gradient_clip,
         mixed_precision=cfg.train.mixed_precision,
+        device=cfg.resources.accelerator,
 
         tensorboard_log_dirpath=tensorboard_log_dirpath,
         checkpoints_dirpath=checkpoints_dirpath,

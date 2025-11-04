@@ -1,0 +1,61 @@
+_target_: mot_jepa.architectures.tdcp.core.build_mm_tdsp_model
+mm_dim: 1024
+similarity_prediction_head_hidden_dim: 1024
+
+sph_common_params:
+  hidden_dim: 512
+sph_per_feature_params:
+  bbox:
+    hidden_dim: 512
+  keypoints:
+    hidden_dim: 512
+  appearance:
+    hidden_dim: 512
+
+common_params:
+  hidden_dim: 512
+  dropout: 0.1
+  track_encoder_n_heads: 8
+  track_encoder_n_layers: 4
+  track_encoder_ffn_dim: 1024
+  projector_intermediate_dim: 512
+  interaction_encoder_enable: true
+  interaction_encoder_n_heads: 8
+  interaction_encoder_n_layers: 4
+  interaction_encoder_ffn_dim: 1024
+per_feature_params:
+  bbox:
+    feature_encoder_type: motion
+    feature_encoder_params:
+      input_dim: 5
+  keypoints:
+    feature_encoder_type: motion
+    feature_encoder_params:
+      input_dim: 35
+  appearance:
+    hidden_dim: 512
+    feature_encoder_type: parts_appearance
+    feature_encoder_params:
+      emb_size: 128
+      hidden_dim: 512
+    track_encoder_enable_motion_encoder: false
+    track_encoder_ffn_dim: 1024
+    interaction_encoder_ffn_dim: 1024
+aggregator_type: sum # transformer
+aggregator_params: {}
+  # hidden_dim: ${model_config.mm_dim}
+  # n_heads: 8
+  # n_layers: 4
+  # dropout: 0.1
+
+per_feature_checkpoint:
+  bbox: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp108b-fromExp107-BboxEmbDim512/checkpoints/last.pt
+  keypoints: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp108k-fromExp107-BboxEmbDim512/checkpoints/last.pt
+  appearance: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp107a-fromExp105-ScaleUp/checkpoints/last.pt
+
+object_interaction_encoder_enable: true
+object_interaction_encoder_params:
+  hidden_dim: ${model_config.mm_dim}
+  n_heads: 8
+  n_layers: 2
+  dropout: 0.1

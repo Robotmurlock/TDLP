@@ -2,10 +2,10 @@ defaults:
   - the_global_config
   - resources: default.yaml
   - dataset: dancetrack_keypoints.yaml
-  - train: batch.yaml
+  - train: bce.yaml
   - eval: default.yaml
-  - model_config: mm_keypoints.yaml
+  - model_config: mm_tdsp_keypoints.yaml
   - path: default.yaml
 
-experiment_name: exp74k-fromExp73-HalvedLrDoubleEpochs
+experiment_name: exp108k-fromExp107-BboxEmbDim512
 dataset_name: DanceTrack

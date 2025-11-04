@@ -2,10 +2,10 @@ defaults:
   - the_global_config
   - resources: default.yaml
   - dataset: dancetrack_appearance.yaml
-  - train: id.yaml
+  - train: bce.yaml
   - eval: default.yaml
-  - model_config: mm_appearance.yaml
+  - model_config: mm_tdsp_appearance.yaml
   - path: default.yaml
 
-experiment_name: exp74a-fromExp73-HalvedLrDoubleEpochs
+experiment_name: exp107a-fromExp105-ScaleUp
 dataset_name: DanceTrack

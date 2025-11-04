@@ -61,8 +61,7 @@ class MOTDatasetIndex(DatasetIndex):
         split: str,
         sequence_list: Optional[List[str]] = None,
         label_type: LabelType = LabelType.GROUND_TRUTH,
-        skip_corrupted: bool = False,
-        test: bool = True
+        skip_corrupted: bool = False
     ) -> None:
         """
         Args:
@@ -77,6 +76,7 @@ class MOTDatasetIndex(DatasetIndex):
             split=split,
             sequence_list=sequence_list
         )
+        test = (split == 'test')
 
         if isinstance(paths, str):
             paths = [paths]

@@ -4,7 +4,7 @@ import pickle
 import shutil
 import zipfile
 from pathlib import Path
-from typing import Dict, Any, Tuple, List
+from typing import Dict, Any, Tuple, List, Optional
 
 import hydra
 import numpy as np
@@ -13,6 +13,7 @@ import torch
 from motrack.library.cv import BBox
 from motrack.tracker.matching.utils import hungarian
 from tqdm import tqdm
+from pathlib import Path
 
 from mot_jepa.common.project import CONFIGS_PATH
 from mot_jepa.config_parser import GlobalConfig
@@ -26,9 +27,15 @@ logger = logging.getLogger('CameltrackFeaturesExtraction')
 
 
 class CamelTrackParser:
-    def __init__(self, states_path: str, temporary_dirpath: str):
+    def __init__(
+        self,
+        states_path: str,
+        temporary_dirpath: str,
+        samples_path: Optional[str] = None
+    ):
         self._states_path = states_path
         self._temporary_path = temporary_dirpath
+        self._samples_path = samples_path
 
         # State
         self._scene_mapping: Dict[str, int] = {}
@@ -43,13 +50,19 @@ class CamelTrackParser:
     def scene_files(self) -> Dict[str, Dict[str, str]]:
         return self._scene_files
 
-    def open(self) -> None:
-        with zipfile.ZipFile(self._states_path, 'r') as zip_ref:
-            zip_ref.extractall(self._temporary_path)
-        pickle_filenames = [filename for filename in os.listdir(self._temporary_path) if filename.endswith('.pkl')]
-        pickle_filepaths = [os.path.join(self._temporary_path, filename) for filename in pickle_filenames]
+    @property
+    def has_samples(self) -> bool:
+        return self._samples_path is not None
 
-        # Extract scene mapping
+    def open(self) -> None:
+        temporary_states_path = os.path.join(self._temporary_path, 'states')
+        Path(temporary_states_path).mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(self._states_path, 'r') as zip_ref:
+            zip_ref.extractall(temporary_states_path)
+        pickle_filenames = [filename for filename in os.listdir(temporary_states_path) if filename.endswith('.pkl')]
+        pickle_filepaths = [os.path.join(temporary_states_path, filename) for filename in pickle_filenames]
+
+        logger.info(f'Extracting scene mapping...')
         self._scene_mapping.clear()
         for filename, filepath in zip(pickle_filenames, pickle_filepaths):
             if not filepath.endswith('_image.pkl'):
@@ -64,7 +77,7 @@ class CamelTrackParser:
             self._scene_mapping[scene_name] = video_id
         self._scene_mapping = dict(sorted(self._scene_mapping.items()))
 
-        # Extract scene files
+        logger.info(f'Extracting scene files...')
         self._scene_files.clear()
         reverse_scene_mapping = {v: k for k, v in self._scene_mapping.items()}
         for filename, filepath in zip(pickle_filenames, pickle_filepaths):
@@ -80,6 +93,20 @@ class CamelTrackParser:
             else:
                 raise ValueError(f'Unexpected filename "{filename}"!')
 
+        logger.info(f'Extracting track ids...')
+        temporary_samples_path = os.path.join(self._temporary_path, 'samples')
+        Path(temporary_samples_path).mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(self._samples_path, 'r') as zip_ref:
+            zip_ref.extractall(temporary_samples_path)
+        pickle_filenames = [filename for filename in os.listdir(temporary_samples_path) if filename.endswith('.pkl')]
+        pickle_filepaths = [os.path.join(temporary_samples_path, filename) for filename in pickle_filenames]
+
+        for filename, filepath in zip(pickle_filenames, pickle_filepaths):
+            video_id = int(filename.replace('.pkl', '').replace('sample_', ''))
+            scene_name = reverse_scene_mapping[video_id]
+            self._scene_files[scene_name]['samples'] = filepath
+
+
     def close(self):
         if os.path.exists(self._temporary_path):
             shutil.rmtree(self._temporary_path)
@@ -91,30 +118,55 @@ class CamelTrackParser:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    def get_scene_dfs(self, scene: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def get_scene_dfs(self, scene: str) -> Dict[str, pd.DataFrame]:
         if scene not in self._cache:
-            with open(self._scene_files[scene]['features'], 'rb') as f:
+            scene_files = self._scene_files[scene]
+            scene_data: Dict[str, pd.DataFrame] = {}
+
+            with open(scene_files['features'], 'rb') as f:
                 df_features = pickle.load(f)
-            with open(self._scene_files[scene]['image'], 'rb') as f:
+                scene_data['features'] = df_features
+            with open(scene_files['image'], 'rb') as f:
                 df_image = pickle.load(f)
-            self._cache[scene] = (df_features, df_image)
+                scene_data['image'] = df_image
+            if 'samples' in scene_files:
+                with open(scene_files['samples'], 'rb') as f:
+                    df_samples = pickle.load(f)
+                    scene_data['samples'] = df_samples
+
+            self._cache[scene] = scene_data
         return self._cache[scene]
 
     def get(self, scene: str, frame_index: int) -> List[dict]:
-        df_features, df_image = self.get_scene_dfs(scene)
+        dfs = self.get_scene_dfs(scene)
+        df_image = dfs['image']
+
+        if 'samples' in dfs:
+            df_data = dfs['samples']
+            has_samples = True
+        else:
+            df_data = dfs['features']
+            has_samples = False
+
         image_id = int(df_image[df_image.frame == frame_index].id.iloc[0])
-        df_frame = df_features[df_features.image_id == image_id]
+        df_data = df_data[df_data.image_id == image_id]
 
         result = []
-        for _, row in df_frame.iterrows():
-            result.append({
+        for _, row in df_data.iterrows():
+            detection_data = {
                 'bbox_xywh': row.bbox_ltwh.tolist(),
                 'bbox_conf': row.bbox_conf,
                 'keypoints_xyc': row.keypoints_xyc.tolist(),
                 'keypoints_conf': row.keypoints_conf,
                 'appearance_embeddings': row.embeddings.tolist(),
                 'appearance_visibility': row.visibility_scores.tolist()
-            })
+            }
+
+            if has_samples:
+                detection_data['object_id'] = f'{scene}_{int(row.person_id)}'
+                detection_data['occlusions'] = [(df_data.loc[idx].person_id, iou) for idx, iou in row.occlusions]
+
+            result.append(detection_data)
 
         return result
 
@@ -172,11 +224,12 @@ def add_track_ids(pred_frame_data: List[dict], gt_frame_data: List[FrameObjectDa
 @pipeline.task('cameltrack-features-extraction')
 def main(cfg: GlobalConfig) -> None:
     # Hardcoded stuff
-    SPLIT = 'test'
+    SPLIT = 'train'
     is_test = (SPLIT == 'test')
     CAMELTRACK_STATES_PATH = f'/media/home/cameltrack-states/dancetrack-{SPLIT}.pklz'
-    TEMPORARY_DIRPATH = '/media/home/cameltrack-states/tmp'
-    EXTRACTED_OUTPUT_PATH = '/media/home/cameltrack-states/extracted-features'
+    CAMELTRACK_SAMPLES_PATH = f'/media/home/data/DanceTrack/states/camel_training/camel_{SPLIT}.pklz'
+    TEMPORARY_DIRPATH = '/media/home/cameltrack-states/extraction-tmp'
+    EXTRACTED_OUTPUT_PATH = '/media/home/cameltrack-states/extracted-features-v2'
 
     dataset_index = dataset_index_factory(
         name=cfg.dataset.index.type,
@@ -188,6 +241,7 @@ def main(cfg: GlobalConfig) -> None:
     n_total_matches, n_total_unmatches = 0, 0
     with CamelTrackParser(
         states_path=CAMELTRACK_STATES_PATH,
+        samples_path=CAMELTRACK_SAMPLES_PATH,
         temporary_dirpath=TEMPORARY_DIRPATH
     ) as parser:
         features_writer = ExtraFeaturesWriter(EXTRACTED_OUTPUT_PATH)
@@ -198,7 +252,7 @@ def main(cfg: GlobalConfig) -> None:
                 pred_frame_data = parser.get(scene_name, frame_index)
                 pred_frame_data = postprocess_data(scene_info, pred_frame_data)
 
-                if not is_test:
+                if not is_test or not parser.has_samples:
                     object_ids = dataset_index.get_objects_present_in_scene_at_frame(scene_name, frame_index)
                     gt_frame_data = [dataset_index.get_object_data_label_by_frame_index(object_id, frame_index) for object_id in object_ids]
                     pred_frame_data, n_matches, n_unmatches = add_track_ids(pred_frame_data, gt_frame_data)

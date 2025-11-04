@@ -1,6 +1,6 @@
 import logging
 from abc import abstractmethod, ABC
-from typing import Dict, Optional
+from typing import Dict
 
 import torch
 
