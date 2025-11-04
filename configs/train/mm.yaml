@@ -5,14 +5,14 @@ defaults:
 loss_config:
   _target_: mot_jepa.trainer.losses.infonce.MultiFeatureLoss
   mm_loss:
-    _target_: mot_jepa.trainer.losses.infonce.IDLevelInfoNCE
+    _target_: mot_jepa.trainer.losses.infonce.ClipLevelInfoNCE
   per_feature_losses:
     bbox:
-      _target_: mot_jepa.trainer.losses.infonce.BatchLevelInfoNCE
+      _target_: mot_jepa.trainer.losses.infonce.ClipLevelInfoNCE
     keypoints:
-      _target_: mot_jepa.trainer.losses.infonce.BatchLevelInfoNCE
+      _target_: mot_jepa.trainer.losses.infonce.ClipLevelInfoNCE
     appearance:
-      _target_: mot_jepa.trainer.losses.infonce.IDLevelInfoNCE
+      _target_: mot_jepa.trainer.losses.infonce.ClipLevelInfoNCE
   per_feature_weights:
     bbox: 0.3
     keypoints: 0.3

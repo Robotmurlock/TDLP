@@ -15,6 +15,7 @@ from typing import List, Tuple, Dict, Any, Optional
 
 import cv2
 import numpy as np
+from mot_jepa.datasets.dataset.feature_extractor.pred_bbox_feature_extractor import SupportedFeatures
 from torch.utils.data import Dataset
 
 from mot_jepa.datasets.dataset.augmentations import Augmentation
@@ -55,6 +56,7 @@ class MOTClipDataset(Dataset):
             clip_sampling_step: Clip sampling step (subsamples dataset)
         """
         self._index = index
+        self._is_train = (index.split == 'train')
 
         # Track parameters
         max_tracks = index.get_max_tracks()

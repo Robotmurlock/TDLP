@@ -42,7 +42,7 @@ class MotionEncoder(nn.Module):
 
 
 class PartsAppearanceEncoder(nn.Module):
-    NUM_PARTS = 5
+    NUM_PARTS = 6
 
     def __init__(self, emb_size: int, hidden_dim: int, dropout: float = 0.1):
         """
@@ -53,14 +53,22 @@ class PartsAppearanceEncoder(nn.Module):
         self._emb_size = emb_size
         self._dropout = dropout
 
-        self._linear_layers = nn.ModuleList([nn.Linear(emb_size, hidden_dim, bias=True)] * (self.NUM_PARTS + 1))
+        self._linear_layers = nn.ModuleList([nn.Linear(emb_size, hidden_dim, bias=True)] * self.NUM_PARTS)
         self._drop = nn.Dropout(dropout)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        assert x.shape[-1] == (self._emb_size * (self.NUM_PARTS + 1))
-        projected = [layer(x[..., i * self._emb_size:(i+1) * self._emb_size]) for i, layer in enumerate(self._linear_layers)]
-        aggregated = torch.stack(projected, dim=1).sum(dim=1)
-        return self._drop(aggregated)
+        P, E = x.shape[-2:]
+        assert P == self.NUM_PARTS
+        assert E == (self._emb_size + 1)
+        embeddings = x[..., :self._emb_size]
+        visibilities = x[..., self._emb_size]
+
+        embeddings = embeddings * visibilities.unsqueeze(-1)
+        projected = self._linear_layers[0](embeddings[..., 0, :])
+        for i, layer in enumerate(self._linear_layers[1:]):
+            projected += layer(embeddings[..., i + 1, :]) * visibilities[..., i + 1].unsqueeze(-1)
+        projected = self._drop(projected)
+        return projected
 
 
 FEATURE_ENCODER_CATALOG = {

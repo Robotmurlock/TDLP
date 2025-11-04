@@ -163,7 +163,7 @@ class EvalConfig:
     split: str = 'val'
     checkpoint: Optional[str] = None
     visualize: bool = False
-    postprocess: bool = False
+    postprocess: bool = True
 
 
 @dataclass

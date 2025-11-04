@@ -4,3 +4,6 @@ extractor_params:
   extra_false_positives: true
   feature_names:
     - appearance
+
+  random_appearance_jitter_ratio: 0.0
+  random_appearance_jitter_range: 0

@@ -7,7 +7,7 @@ common_params:
   track_encoder_n_layers: 2
   track_encoder_ffn_dim: 512
   projector_intermediate_dim: 512
-  interaction_encoder_enable: true
+  interaction_encoder_enable: false
   interaction_encoder_n_heads: 8
   interaction_encoder_n_layers: 2
   interaction_encoder_ffn_dim: 512
@@ -35,9 +35,9 @@ aggregator_params:
   dropout: 0.1
 
 per_feature_checkpoint:
-  bbox: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp74b-fromExp73-HalvedLrDoubleEpochs/checkpoints/last.pt
-  keypoints: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp74k-fromExp73-HalvedLrDoubleEpochs/checkpoints/last.pt
-  appearance: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp74a-fromExp73-HalvedLrDoubleEpochs/checkpoints/last.pt
+  bbox: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp93b-fromExp90-ClipLevelBCE/checkpoints/last.pt
+  keypoints: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp93k-fromExp90-ClipLevelBCE/checkpoints/last.pt
+  appearance: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp98a-fromExp97-EmbDim512/checkpoints/last.pt
 
 object_interaction_encoder_enable: true
 object_interaction_encoder_params:

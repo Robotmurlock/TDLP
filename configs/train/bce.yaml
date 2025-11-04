@@ -1,0 +1,8 @@
+defaults:
+  - base.yaml
+  - _self_
+
+loss_config:
+  _target_: mot_jepa.trainer.losses.bce.ClipLevelBCE
+  pos_weight: 10.0
+  assoc_threshold: 1e-2

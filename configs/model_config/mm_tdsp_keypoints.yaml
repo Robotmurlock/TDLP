@@ -1,0 +1,28 @@
+_target_: mot_jepa.architectures.tdcp.core.build_mm_tdsp_model
+mm_dim: 1024
+similarity_prediction_head_hidden_dim: 512
+
+sph_common_params:
+  hidden_dim: 512
+sph_per_feature_params:
+  keypoints:
+    hidden_dim: 512
+
+common_params:
+  hidden_dim: 512
+  dropout: 0.1
+  track_encoder_n_heads: 8
+  track_encoder_n_layers: 4
+  track_encoder_ffn_dim: 1024
+  projector_intermediate_dim: 512
+  interaction_encoder_enable: true
+  interaction_encoder_n_heads: 8
+  interaction_encoder_n_layers: 4
+  interaction_encoder_ffn_dim: 1024
+per_feature_params:
+  keypoints:
+    feature_encoder_type: motion
+    feature_encoder_params:
+      input_dim: 35
+aggregator_type: sum
+aggregator_params: {}

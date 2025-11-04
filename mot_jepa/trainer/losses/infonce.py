@@ -109,7 +109,7 @@ class ClipLevelInfoNCE(VideoClipLoss):
         track_predictions = torch_combine(track_predictions_list, dtype=torch.long)
         det_predictions = torch_combine(det_predictions_list, dtype=torch.long)
 
-        loss = sum(losses) / len(losses)
+        loss = torch.stack(losses).mean()
         return {
             'loss': loss,
             'track_loss': loss,
