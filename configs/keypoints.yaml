@@ -1,11 +1,15 @@
 defaults:
   - the_global_config
   - resources: default.yaml
-  - dataset: dancetrack_keypoints.yaml
+  - dataset: sportsmot_keypoints.yaml
   - train: bce.yaml
   - eval: default.yaml
   - model_config: mm_tdsp_keypoints.yaml
   - path: default.yaml
 
-experiment_name: exp108k-fromExp107-BboxEmbDim512
-dataset_name: DanceTrack
+experiment_name: exp04k-fromExp03-Mem150
+dataset_name: SportsMOT
+
+
+resources:
+  batch_size: 16

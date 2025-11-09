@@ -1,14 +1,14 @@
 defaults:
   - the_global_config
   - resources: default.yaml
-  - dataset: dancetrack.yaml
+  - dataset: sportsmot.yaml
   - train: bce.yaml
   - eval: default.yaml
   - model_config: mm_tdsp_bboxes_keypoints_appearance.yaml
   - path: default.yaml
 
-experiment_name: exp111-fromExp110-LinearSumDecoder
-dataset_name: DanceTrack
+experiment_name: exp04-fromExp03-Mem150
+dataset_name: SportsMOT
 
 resources:
   batch_size: 8

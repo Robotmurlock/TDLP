@@ -251,7 +251,7 @@ class MyTracker(Tracker):
         for t_i in unmatched_tracklets:
             tracklet = tracklets[t_i]
 
-            if tracklet.lost_time > self._remember_threshold or tracklet.age < 3:
+            if tracklet.lost_time > self._remember_threshold or tracklet.age < 0:  # 3 -> 1
                 tracklet.state = TrackletState.DELETED
             else:
                 tracklet.state = TrackletState.LOST
@@ -334,12 +334,12 @@ def main(cfg: GlobalConfig) -> None:
         model=model,
         extra_features_reader=extra_features_reader,
         device=cfg.resources.accelerator,
-        remember_threshold=50,
+        remember_threshold=150,
         use_conf=True,
-        detection_threshold=0.4,
-        sim_threshold=0.985,
+        detection_threshold=0.1,
+        sim_threshold=0.99,
         initialization_threshold=1,
-        new_tracklet_detection_threshold=0.9
+        new_tracklet_detection_threshold=0.4
     )
 
     # DanceTrack exp111:
@@ -348,6 +348,13 @@ def main(cfg: GlobalConfig) -> None:
     # sim_threshold=0.985,
     # initialization_threshold=1,
     # new_tracklet_detection_threshold=0.9
+
+    # SportsMOT exp04:
+    # remember_threshold=150,
+    # detection_threshold=0.1,
+    # sim_threshold=0.99,
+    # initialization_threshold=1,
+    # new_tracklet_detection_threshold=0.4
 
     scene_names = dataset_index.scenes
     for scene_name in tqdm(scene_names):

@@ -41,17 +41,20 @@ per_feature_params:
     track_encoder_enable_motion_encoder: false
     track_encoder_ffn_dim: 1024
     interaction_encoder_ffn_dim: 1024
-aggregator_type: sum # transformer
+aggregator_type: sum
 aggregator_params: {}
-  # hidden_dim: ${model_config.mm_dim}
-  # n_heads: 8
-  # n_layers: 4
-  # dropout: 0.1
 
-per_feature_checkpoint:
-  bbox: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp108b-fromExp107-BboxEmbDim512/checkpoints/last.pt
-  keypoints: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp108k-fromExp107-BboxEmbDim512/checkpoints/last.pt
-  appearance: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp107a-fromExp105-ScaleUp/checkpoints/last.pt
+# DanceTrack (exp111)
+# per_feature_checkpoint:
+#   bbox: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp108b-fromExp107-BboxEmbDim512/checkpoints/last.pt
+#   keypoints: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp108k-fromExp107-BboxEmbDim512/checkpoints/last.pt
+#   appearance: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp107a-fromExp105-ScaleUp/checkpoints/last.pt
+
+# SportsMOT (exp04)
+# per_feature_checkpoint:
+#   bbox: /media/home/MOT-JEPA-outputs/experiments/SportsMOT/exp04b-fromExp03-Mem150/checkpoints/last.pt
+#   keypoints: /media/home/MOT-JEPA-outputs/experiments/SportsMOT/exp04k-fromExp03-Mem150/checkpoints/last.pt
+#   appearance: /media/home/MOT-JEPA-outputs/experiments/SportsMOT/exp04a-fromExp03-Mem150/checkpoints/last.pt
 
 object_interaction_encoder_enable: true
 object_interaction_encoder_params:

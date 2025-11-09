@@ -2,7 +2,6 @@ defaults:
   - transform: scaled_bbox_keypoints.yaml
   - augmentations: default.yaml
   - feature_extractor: pred_appearance.yaml
-  # - sampler: scene_sampler_within_range.yaml
 
 index:
   type: mot
