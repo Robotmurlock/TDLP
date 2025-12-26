@@ -1,5 +1,5 @@
 import pytest
-from mot_jepa.datasets.dataset.transform.utils import expand_pattern
+from tdlp.datasets.dataset.transform.utils import expand_pattern
 
 
 def test_examples_from_prompt():

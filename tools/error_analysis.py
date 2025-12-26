@@ -1,12 +1,11 @@
 import cv2
 import hydra
+from tdlp.common.project import CONFIGS_PATH
+from tdlp.config_parser import GlobalConfig
+from tdlp.datasets.dataset import dataset_index_factory
+from tdlp.utils import pipeline
 import torch
 import torch.nn.functional as F
-
-from mot_jepa.common.project import CONFIGS_PATH
-from mot_jepa.config_parser import GlobalConfig
-from mot_jepa.datasets.dataset import dataset_index_factory
-from mot_jepa.utils import pipeline
 
 
 def bbox_iou_matrix_xywh(bboxes: torch.Tensor) -> torch.Tensor:

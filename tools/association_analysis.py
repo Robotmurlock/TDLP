@@ -1,23 +1,23 @@
+import logging
 from pathlib import Path
 from typing import Dict
 
-import hydra
-import torch
-from torch.nn import functional as F
-from matplotlib import pyplot as plt
 from tqdm import tqdm
 
-from mot_jepa.architectures.tdcp.core import MultiModalTDCP, MultiModalTDSP
-from mot_jepa.common.project import CONFIGS_PATH
-from mot_jepa.config_parser import GlobalConfig
-from mot_jepa.datasets.dataset.common.data import VideoClipData, VideoClipPart
-from mot_jepa.datasets.dataset.feature_extractor.pred_bbox_feature_extractor import (
+import hydra
+from matplotlib import pyplot as plt
+from tdlp.architectures.tdlp.core import MultiModalTDCP, MultiModalTDSP
+from tdlp.common.project import CONFIGS_PATH
+from tdlp.config_parser import GlobalConfig
+from tdlp.datasets.dataset.common.data import VideoClipData, VideoClipPart
+from tdlp.datasets.dataset.feature_extractor.pred_bbox_feature_extractor import (
     PredictionBBoxFeatureExtractor,
     SupportedFeatures,
 )
-from mot_jepa.datasets.dataset.transform.base import IdentityTransform, Transform
-from mot_jepa.utils import pipeline
-import logging
+from tdlp.datasets.dataset.transform.base import IdentityTransform, Transform
+from tdlp.utils import pipeline
+import torch
+from torch.nn import functional as F
 
 
 logger = logging.getLogger('Inference')

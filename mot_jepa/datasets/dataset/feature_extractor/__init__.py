@@ -1,4 +1,0 @@
-from mot_jepa.datasets.dataset.feature_extractor.feature_extractor import FeatureExtractor
-from mot_jepa.datasets.dataset.feature_extractor.gt_bbox_feature_extractor import GTBBoxFeatureExtractor
-from mot_jepa.datasets.dataset.feature_extractor.pred_bbox_feature_extractor import PredictionBBoxFeatureExtractor
-from mot_jepa.datasets.dataset.feature_extractor.factory import feature_extractor_factory

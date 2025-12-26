@@ -1,28 +1,28 @@
+import json
 import logging
 import os.path
+from pathlib import Path
+from pathlib import Path
 import pickle
 import shutil
+from typing import Any, Dict, List, Optional, Tuple
 import zipfile
-from pathlib import Path
-from typing import Dict, Any, Tuple, List, Optional
+
+import numpy as np
+from tqdm import tqdm
 
 import hydra
-import numpy as np
-import json
-import pandas as pd
-import torch
 from motrack.library.cv import BBox
 from motrack.tracker.matching.utils import hungarian
-from tqdm import tqdm
-from pathlib import Path
-
-from mot_jepa.common.project import CONFIGS_PATH
-from mot_jepa.config_parser import GlobalConfig
-from mot_jepa.datasets.common import BasicSceneInfo
-from mot_jepa.datasets.dataset import dataset_index_factory
-from mot_jepa.datasets.dataset.index.index import FrameObjectData
-from mot_jepa.utils import pipeline
-from mot_jepa.utils.extra_features import ExtraFeaturesWriter
+import pandas as pd
+from tdlp.common.project import CONFIGS_PATH
+from tdlp.config_parser import GlobalConfig
+from tdlp.datasets.common import BasicSceneInfo
+from tdlp.datasets.dataset import dataset_index_factory
+from tdlp.datasets.dataset.index.index import FrameObjectData
+from tdlp.utils import pipeline
+from tdlp.utils.extra_features import ExtraFeaturesWriter
+import torch
 
 logger = logging.getLogger('CameltrackFeaturesExtraction')
 

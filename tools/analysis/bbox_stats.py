@@ -1,15 +1,15 @@
 import logging
 from typing import Optional
 
-import hydra
-import torch
 from tqdm import tqdm
 import yaml
 
-from mot_jepa.common.project import CONFIGS_PATH
-from mot_jepa.config_parser import GlobalConfig
-from mot_jepa.datasets.dataset import dataset_index_factory
-from mot_jepa.utils import pipeline
+import hydra
+from tdlp.common.project import CONFIGS_PATH
+from tdlp.config_parser import GlobalConfig
+from tdlp.datasets.dataset import dataset_index_factory
+from tdlp.utils import pipeline
+import torch
 
 logger = logging.getLogger('DatasetStatCalculation')
 

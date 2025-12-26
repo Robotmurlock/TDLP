@@ -3,26 +3,27 @@ import os.path
 from pathlib import Path
 from typing import List, Tuple
 
+import numpy as np
+from tqdm import tqdm
+
+import cv2
 import hydra
-import torch
-from motrack.library.cv import PredBBox, BBox
+from motrack.library.cv import BBox, PredBBox
 from motrack.library.cv import color_palette
 from motrack.library.cv.video_writer import MP4Writer
 from motrack.tools.visualize import draw_tracklet
-from tqdm import tqdm
-
-from mot_jepa.common.project import CONFIGS_PATH
-from mot_jepa.config_parser import GlobalConfig
-from mot_jepa.datasets.dataset import dataset_index_factory
-from mot_jepa.datasets.dataset.index.mot import SceneInfo
-from mot_jepa.utils import pipeline
-from mot_jepa.utils.extra_features import ExtraFeaturesReader
+from tdlp.common.project import CONFIGS_PATH
+from tdlp.config_parser import GlobalConfig
+from tdlp.datasets.dataset import dataset_index_factory
+from tdlp.datasets.dataset.index.mot import SceneInfo
+from tdlp.utils import pipeline
+from tdlp.utils.extra_features import ExtraFeaturesReader
+import torch
 
 logger = logging.getLogger('CameltrackFeaturesExtraction')
 
 
-import cv2
-import numpy as np
+
 
 # COCO keypoint connections (pairs of keypoint indices)
 COCO_PAIRS = [

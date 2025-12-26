@@ -1,1 +1,0 @@
-from mot_jepa.architectures.tdcp.core import TrackDetectionContrastivePrediction, build_tdcp_model

@@ -2,17 +2,16 @@ import os
 from typing import Optional
 
 import hydra
+from tdlp.common import conventions
+from tdlp.common.project import CONFIGS_PATH
+from tdlp.config_parser import GlobalConfig
+from tdlp.datasets.dataset import MOTClipDataset, dataset_index_factory
+from tdlp.trainer.torch_distrib_utils import DistributedSamplerWrapper
+from tdlp.trainer.trainer import ContrastiveTrainer
+from tdlp.utils import pipeline
+from tools.utils import check_train_experiment_history, logger
 import torch
 from torch.utils.data import DataLoader, DistributedSampler, Sampler
-
-from mot_jepa.common import conventions
-from mot_jepa.common.project import CONFIGS_PATH
-from mot_jepa.config_parser import GlobalConfig
-from mot_jepa.datasets.dataset import dataset_index_factory, MOTClipDataset
-from mot_jepa.trainer.torch_distrib_utils import DistributedSamplerWrapper
-from mot_jepa.trainer.trainer import ContrastiveTrainer
-from mot_jepa.utils import pipeline
-from tools.utils import check_train_experiment_history, logger
 
 
 def create_dataloader(

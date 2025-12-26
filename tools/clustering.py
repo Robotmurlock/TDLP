@@ -1,24 +1,22 @@
-import hydra
-import matplotlib.pyplot as plt
 import numpy as np
-import torch
-import torch.nn.functional as F
-from sklearn.manifold import TSNE
+import numpy as np
 from tqdm import tqdm
 
-from mot_jepa.common.project import CONFIGS_PATH
-from mot_jepa.config_parser import GlobalConfig
-from mot_jepa.datasets.dataset import dataset_index_factory
-from mot_jepa.trainer import torch_helper
-from mot_jepa.utils import pipeline
-from tools.train import create_dataloader
-
-
-import numpy as np
-import torch
+import hydra
 import matplotlib.pyplot as plt
-from sklearn.manifold import TSNE
+import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+from sklearn.manifold import TSNE
+from tdlp.common.project import CONFIGS_PATH
+from tdlp.config_parser import GlobalConfig
+from tdlp.datasets.dataset import dataset_index_factory
+from tdlp.trainer import torch_helper
+from tdlp.utils import pipeline
+from tools.train import create_dataloader
+import torch
+import torch
+import torch.nn.functional as F
 
 def visualize_embeddings_tsne_pca(
     det_embeddings: torch.Tensor,

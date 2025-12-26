@@ -4,8 +4,8 @@ import shutil
 import sys
 from typing import Optional
 
-from mot_jepa.common import conventions
-from mot_jepa.trainer import torch_distrib_utils
+from tdlp.common import conventions
+from tdlp.trainer import torch_distrib_utils
 
 logger = logging.getLogger('ToolsUtility')
 

@@ -1,12 +1,11 @@
 import pytest
-import torch
-
-from mot_jepa.trainer.losses.base import VideoClipLoss
-from mot_jepa.trainer.losses.infonce import (
+from tdlp.trainer.losses.base import VideoClipLoss
+from tdlp.trainer.losses.infonce import (
     BatchLevelInfoNCE,
     IDLevelInfoNCE,
     MultiFeatureLoss,
 )
+import torch
 
 
 class ConstantLoss(VideoClipLoss):

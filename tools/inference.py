@@ -9,20 +9,6 @@ import numpy as np
 from tqdm import tqdm
 
 import hydra
-from mot_jepa.architectures.tdcp.core import MultiModalTDCP, MultiModalTDSP
-from mot_jepa.common import conventions
-from mot_jepa.common.project import CONFIGS_PATH
-from mot_jepa.config_parser import GlobalConfig
-from mot_jepa.datasets.dataset import dataset_index_factory
-from mot_jepa.datasets.dataset.common.data import VideoClipData, VideoClipPart
-from mot_jepa.datasets.dataset.feature_extractor.pred_bbox_feature_extractor import (
-    PredictionBBoxFeatureExtractor,
-    SupportedFeatures,
-)
-from mot_jepa.datasets.dataset.motrack import MotrackDatasetWrapper
-from mot_jepa.datasets.dataset.transform import Transform
-from mot_jepa.utils import pipeline
-from mot_jepa.utils.extra_features import ExtraFeaturesReader
 from motrack.evaluation.io import TrackerInferenceWriter
 from motrack.library.cv.bbox import BBox, PredBBox
 from motrack.object_detection import DetectionManager
@@ -34,6 +20,20 @@ from motrack.tracker.matching.utils import hungarian
 from motrack.tracker.tracklet import Tracklet, TrackletState
 from motrack.utils.collections import unpack_n
 from motrack.utils.lookup import LookupTable
+from tdlp.architectures.tdlp.core import MultiModalTDCP, MultiModalTDSP
+from tdlp.common import conventions
+from tdlp.common.project import CONFIGS_PATH
+from tdlp.config_parser import GlobalConfig
+from tdlp.datasets.dataset import dataset_index_factory
+from tdlp.datasets.dataset.common.data import VideoClipData, VideoClipPart
+from tdlp.datasets.dataset.feature_extractor.pred_bbox_feature_extractor import (
+    PredictionBBoxFeatureExtractor,
+    SupportedFeatures,
+)
+from tdlp.datasets.dataset.motrack import MotrackDatasetWrapper
+from tdlp.datasets.dataset.transform import Transform
+from tdlp.utils import pipeline
+from tdlp.utils.extra_features import ExtraFeaturesReader
 import torch
 from torch import nn
 from torch.nn import functional as F
