@@ -16,3 +16,20 @@ transforms:
       bbox: [0.05, 0.05, 0.05, 0.05, 1.0]
       keypoints: [[17, [0.05, 0.05]], 1.0]
     fod_time_scaled: true
+
+  # # - _target_: mot_jepa.datasets.dataset.transform.BBoxXYWHtoXYXY
+  # # - _target_: mot_jepa.datasets.dataset.transform.BBoxMinMaxScaling
+  # - _target_: mot_jepa.datasets.dataset.transform.FeatureFODStandardization
+  #   coord_mean:
+  #     bbox: [0.0, 0.0, 0.0, 0.0, 0.0]
+  #     keypoints: [[35, [0.0]]]
+  #   coord_std:
+  #     bbox: [1.0, 1.0, 1.0, 1.0, 1.0]
+  #     keypoints: [[17, [1.0, 1.0]], 1.0]
+  #   fod_mean:
+  #     bbox: [0.0, 0.0, 0.0, 0.0, 0.0]
+  #     keypoints: [[35, [0.0]]]
+  #   fod_std:
+  #     bbox: [1.0, 1.0, 1.0, 1.0, 1.0]
+  #     keypoints: [[17, [1.0, 1.0]], 1.0]
+  #   fod_time_scaled: false

@@ -24,5 +24,6 @@ per_feature_params:
     feature_encoder_type: motion
     feature_encoder_params:
       input_dim: 5
+
 aggregator_type: sum
 aggregator_params: {}

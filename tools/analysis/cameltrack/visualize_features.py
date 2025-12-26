@@ -96,8 +96,15 @@ def draw_frame_features(frame: np.ndarray, scene_info: SceneInfo, frame_features
             bbox=bbox
         )
 
-        color = color_palette.ALL_COLORS_EXPECT_BLACK[int(object_id) % len(color_palette.ALL_COLORS_EXPECT_BLACK)]
-        frame = draw_keypoints(frame, np.array(features['keypoints_xyc']), color=color, imwidth=scene_info.imwidth, imheight=scene_info.imheight)
+        if "keypoints_xyc" in features:
+            color = color_palette.ALL_COLORS_EXPECT_BLACK[int(object_id) % len(color_palette.ALL_COLORS_EXPECT_BLACK)]
+            frame = draw_keypoints(
+                image=frame,
+                keypoints_xyc=np.array(features['keypoints_xyc']),
+                color=color,
+                imwidth=scene_info.imwidth,
+                imheight=scene_info.imheight
+            )
 
     return frame
 
@@ -108,8 +115,8 @@ def draw_frame_features(frame: np.ndarray, scene_info: SceneInfo, frame_features
 def main(cfg: GlobalConfig) -> None:
     # Hardcoded stuff
     SPLIT = 'train'
-    EXTRACTED_OUTPUT_PATH = '/media/home/cameltrack-states/extracted-features'
-    EXTRACTED_VIDEOS_PATH = '/media/home/cameltrack-states/videos'
+    EXTRACTED_OUTPUT_PATH = '/media/home/cameltrack-states/extracted-features-bee24'
+    EXTRACTED_VIDEOS_PATH = '/media/home/cameltrack-states/videos-bee24'
 
     dataset_index = dataset_index_factory(
         name=cfg.dataset.index.type,
@@ -127,6 +134,7 @@ def main(cfg: GlobalConfig) -> None:
                 frame_features = features_reader.read(scene_name, frame_index)
                 frame_path = dataset_index.get_scene_image_path(scene_name, frame_index)
                 frame = cv2.imread(frame_path)
+                assert frame is not None, f'Failed to load image "{frame_path}"!'
                 frame = draw_frame_features(frame, scene_info, frame_features)
 
                 mp4_writer.write(frame)

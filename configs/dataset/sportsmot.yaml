@@ -13,4 +13,4 @@ feature_extractor:
 
 
 n_tracks: 25
-clip_length: 150
+clip_length: 50

@@ -59,12 +59,8 @@ class MOTClipDataset(Dataset):
         self._is_train = (index.split == 'train')
 
         # Track parameters
-        max_tracks = index.get_max_tracks()
-        logger.info(f'Maximum number of tracks over all scenes: {max_tracks}.')
-
-        if n_tracks < max_tracks:
-            logger.warning(f'Number of tracks ({n_tracks}) is lower than maximum '
-                           f'number of tracks ({max_tracks}) in a scene.')
+        scene_with_max_tracks, max_tracks = index.get_max_tracks()
+        logger.info(f'Maximum number of tracks over all scenes: {max_tracks} in scene {scene_with_max_tracks}.')
         self._n_tracks = n_tracks
 
         # Temporal parameters
@@ -80,6 +76,7 @@ class MOTClipDataset(Dataset):
 
         # Create mapping (object_id -> unique number)
         self._id_lookup = self._create_id_lookup(index)
+        logger.info(f'Number of unique objects: {len(self._id_lookup)}')
 
         # Transforms
         self._transform = transform
@@ -149,6 +146,7 @@ class MOTClipDataset(Dataset):
         n_skipped = 0
         n_total = 0
 
+        n_max_tracks_in_clip = 0
         for scene in index.scenes:
             seqlength = index.get_scene_info(scene).seqlength
 
@@ -160,12 +158,15 @@ class MOTClipDataset(Dataset):
 
                 n_total += 1
 
-                if len(index.get_objects_present_in_scene_clip(scene, start_index, end_index)) <= min_clip_tracks:
+                n_tracks_in_clip = len(index.get_objects_present_in_scene_clip(scene, start_index, end_index))
+                n_max_tracks_in_clip = max(n_max_tracks_in_clip, n_tracks_in_clip)
+                if n_tracks_in_clip <= min_clip_tracks:
                     n_skipped += 1
                     continue
                 clip_index.append((scene, start_index, start_index + clip_length + 1))
 
         logger.info(f'Sampled total number of {n_total} clips ')
+        logger.info(f'Maximum number of tracks in a clip: {n_max_tracks_in_clip}')
 
         return clip_index
 

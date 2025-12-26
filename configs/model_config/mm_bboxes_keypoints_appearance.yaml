@@ -35,9 +35,9 @@ aggregator_params:
   dropout: 0.1
 
 per_feature_checkpoint:
-  bbox: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp93b-fromExp90-ClipLevelBCE/checkpoints/last.pt
-  keypoints: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp93k-fromExp90-ClipLevelBCE/checkpoints/last.pt
-  appearance: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp98a-fromExp97-EmbDim512/checkpoints/last.pt
+  bbox: /media/home/MOT-JEPA-outputs/experiments/SportsMOT/exp08b-fromExp07-NoBBoxTransform/checkpoints/last.pt
+  keypoints: /media/home/MOT-JEPA-outputs/experiments/SportsMOT/exp08k-fromExp07-NoKeypointsTransform/checkpoints/last.pt
+  appearance: /media/home/MOT-JEPA-outputs/experiments/SportsMOT/exp06a-fromExp05-Mem50/checkpoints/last.pt
 
 object_interaction_encoder_enable: true
 object_interaction_encoder_params:

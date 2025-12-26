@@ -1,0 +1,179 @@
+# TDCP, mem=50
+defaults:
+  - the_global_config
+  - _self_
+
+experiment_name: exp06b-fromExp05-Mem50
+dataset_name: SportsMOT
+resources:
+  batch_size: 32
+  accelerator: cuda:0
+  num_workers: 20
+  val_batch_size: 16
+dataset:
+  index:
+    type: mot
+    params:
+      paths:
+      - /media/home/SportsMOT/sportsmot_publish/dataset
+    sequence_list: null
+  n_tracks: 25
+  clip_length: 50
+  min_clip_tracks: 1
+  clip_sampling_step: 1
+  val_clip_sampling_step: 1
+  feature_extractor:
+    extractor_type: pred_bbox
+    extractor_params:
+      prediction_path: /media/home/cameltrack-states/extracted-features-sportsmot
+      extra_false_positives: true
+      feature_names:
+      - bbox
+  transform:
+    _target_: mot_jepa.datasets.dataset.transform.ComposeTransform
+    transforms:
+    - _target_: mot_jepa.datasets.dataset.transform.BBoxXYWHtoXYXY
+    - _target_: mot_jepa.datasets.dataset.transform.BBoxMinMaxScaling
+    - _target_: mot_jepa.datasets.dataset.transform.FeatureFODStandardization
+      coord_mean:
+        bbox:
+        - 0.5
+        - 0.5
+        - 0.5
+        - 0.5
+        - 0.5
+        keypoints:
+        - - 35
+          - - 0.5
+      coord_std:
+        bbox:
+        - 0.1
+        - 0.1
+        - 0.1
+        - 0.1
+        - 1.0
+        keypoints:
+        - - 17
+          - - 0.1
+            - 0.1
+        - 1.0
+      fod_mean:
+        bbox:
+        - 0.0
+        - 0.0
+        - 0.0
+        - 0.0
+        - 0.0
+        keypoints:
+        - - 35
+          - - 0.0
+      fod_std:
+        bbox:
+        - 0.05
+        - 0.05
+        - 0.05
+        - 0.05
+        - 1.0
+        keypoints:
+        - - 17
+          - - 0.05
+            - 0.05
+        - 1.0
+      fod_time_scaled: true
+  augmentations:
+    _target_: mot_jepa.datasets.dataset.augmentations.base.CompositionAugmentation
+    augmentations:
+    - _target_: mot_jepa.datasets.dataset.augmentations.bbox.BBoxGaussianNoiseAugmentation
+      sigma: 0.05
+      proba: 0.4
+      unobs_noise: true
+    - _target_: mot_jepa.datasets.dataset.augmentations.bbox.BBoxGaussianNoiseAugmentation
+      sigma: 0.1
+      proba: 0.1
+      unobs_noise: true
+    - _target_: mot_jepa.datasets.dataset.augmentations.bbox.BBoxGaussianNoiseAugmentation
+      sigma: 0.25
+      proba: 0.05
+      unobs_noise: true
+    - _target_: mot_jepa.datasets.dataset.augmentations.video.PointOcclusionAugmentations
+      drop_ratio: 0.3
+    - _target_: mot_jepa.datasets.dataset.augmentations.video.LeftOrRightOcclusionAugmentations
+      drop_ratio: 0.2
+    - _target_: mot_jepa.datasets.dataset.augmentations.video.IdentitySwitchAugmentation
+      switch_ratio: 0.3
+    - _target_: mot_jepa.datasets.dataset.augmentations.appearance.AppearanceNoiseAugmentation
+      alpha: 0.4
+    - _target_: mot_jepa.datasets.dataset.augmentations.video.SmartIdentitySwitchAugmentation
+      switch_ratio: 0.5
+      iou_threshold: 0.5
+      max_switch_ratio: 0.5
+  sampler: null
+  use_batch_sampler: false
+train:
+  max_epochs: 20
+  loss_config:
+    _target_: mot_jepa.trainer.losses.infonce.ClipLevelInfoNCE
+  optimizer_config:
+    _target_: torch.optim.AdamW
+    lr: 5.0e-05
+    weight_decay: 0.01
+  scheduler_config:
+    _target_: mot_jepa.trainer.scheduler.create_warmup_cosine_annealing_scheduler
+    n_warmup_epochs: 2
+  gradient_clip: 1.0
+  mixed_precision: true
+  resume: false
+  truncate: false
+  checkpoint_cfg:
+    metric_monitor: val-epoch/loss
+    resume_from: null
+model_config:
+  _target_: mot_jepa.architectures.tdcp.core.build_mm_tdcp_model
+  mm_dim: 1024
+  common_params:
+    hidden_dim: 256
+    dropout: 0.1
+    track_encoder_n_heads: 8
+    track_encoder_n_layers: 2
+    track_encoder_ffn_dim: 512
+    projector_intermediate_dim: 512
+    interaction_encoder_enable: false
+    interaction_encoder_n_heads: 8
+    interaction_encoder_n_layers: 2
+    interaction_encoder_ffn_dim: 512
+  per_feature_params:
+    bbox:
+      feature_encoder_type: motion
+      feature_encoder_params:
+        input_dim: 5
+  aggregator_type: sum
+  aggregator_params: {}
+path:
+  master: /media/home/MOT-JEPA-outputs
+eval:
+  object_detection:
+    type: yolox
+    params:
+      accelerator: cuda:0
+      conf: 0.6
+      min_bbox_area: 100
+      model_path: /media/home/DanceTrack-orig/.other/bytetrack_models/bytetrack_model.pth.tar
+    lookup_path: /media/home/DanceTrack-orig/.other/.lookup.json
+    cache_path: /workspace/motrack/dancetrack_yolox
+    oracle: false
+  tracker:
+    remember_threshold: 50
+    detection_threshold: 0.1
+    new_tracklet_detection_threshold: 0.4
+    initialization_threshold: 1
+    sim_threshold: 0.95
+  split: val
+  checkpoint: null
+  visualize: false
+  postprocess_enable: true
+  postprocess:
+    init_threshold: 1
+    linear_interpolation_threshold: 30
+    linear_interpolation_min_tracklet_length: 30
+    min_tracklet_length: 0
+analysis: null

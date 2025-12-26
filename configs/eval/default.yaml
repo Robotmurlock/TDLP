@@ -1,4 +1,17 @@
 defaults:
-  - object_detection: yolox.yaml
+  - object_detection: yolox_dancetrack.yaml
 
 split: 'val'
+
+tracker:
+  remember_threshold: 50
+  detection_threshold: 0.50
+  sim_threshold: 0.95
+  initialization_threshold: 1
+  new_tracklet_detection_threshold: 0.55
+  
+postprocess:
+  init_threshold: 1
+  linear_interpolation_threshold: 30
+  linear_interpolation_min_tracklet_length: 30
+  min_tracklet_length: 0

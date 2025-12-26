@@ -116,7 +116,7 @@ class ClipLevelBCE(nn.Module):
                     det_predictions_list.append(det_predictions)
 
         self._k += 1
-        if self._k % 100 == 0:
+        if self._k % 100 == 0 and torch.numel(probas[mask]) > 0:
             print(
                 f'{probas[mask].mean()=}', 
                 f'{probas[mask].max()=}', 

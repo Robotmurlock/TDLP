@@ -211,7 +211,7 @@ class DatasetIndex(ABC):
             List of present objects in scene/video.
         """
         scene_info = self.get_scene_info(scene_name)
-        return self.get_objects_present_in_scene_clip(scene_name, 0, scene_info.seqlength - 1)
+        return self.get_objects_present_in_scene_clip(scene_name, 0, scene_info.seqlength)
 
     def get_max_tracks(self) -> int:
         """
@@ -219,6 +219,10 @@ class DatasetIndex(ABC):
             Maximum number of tracks over all scenes.
         """
         n = 0
+        scene_with_max_tracks = None
         for scene in self.scenes:
-            n = max(n, len(self.get_scene_object_ids(scene)))
-        return n
+            n_tracks = len(self.get_scene_object_ids(scene))
+            if n_tracks > n:
+                n = n_tracks
+                scene_with_max_tracks = scene
+        return scene_with_max_tracks, n

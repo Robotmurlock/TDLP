@@ -158,12 +158,31 @@ class EvalObjectDetectionConfig:
 
 
 @dataclass
+class EvalTrackerConfig:
+    remember_threshold: int
+    detection_threshold: float
+    new_tracklet_detection_threshold: float
+    initialization_threshold: int
+    sim_threshold: float
+
+
+@dataclass
+class EvalPostprocessConfig:
+    init_threshold: int = 2  # Activate `init_threshold` starting bboxes
+    linear_interpolation_threshold: int = 3  # Maximum distance to perform linear interpolation
+    linear_interpolation_min_tracklet_length: int = 30  # Minimum tracklet length to perform linear interpolation
+    min_tracklet_length: int = 20  # Remove all tracklets that are shorter than this
+
+
+@dataclass
 class EvalConfig:
     object_detection: EvalObjectDetectionConfig
+    tracker: Optional[EvalTrackerConfig] = None
     split: str = 'val'
     checkpoint: Optional[str] = None
     visualize: bool = False
-    postprocess: bool = True
+    postprocess_enable: bool = True
+    postprocess: EvalPostprocessConfig = field(default_factory=EvalPostprocessConfig)
 
 
 @dataclass

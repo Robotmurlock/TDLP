@@ -26,8 +26,8 @@ services:
       - '${DATA}:/media/home'
       - '${CODE:-$PWD}:/work'
 
-  tdcp-tensorboard:
-    container_name: ${TB_CONT_NAME:-tdcp-tensorboard}
+  tdcp-tensorboard-dancetrack:
+    container_name: ${TB_CONT_NAME:-tdcp-tensorboard-dancetrack}
     build:
       context: ..
       dockerfile: docker/tensorboard.Dockerfile

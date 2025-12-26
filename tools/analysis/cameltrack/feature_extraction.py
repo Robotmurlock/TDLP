@@ -8,6 +8,7 @@ from typing import Dict, Any, Tuple, List, Optional
 
 import hydra
 import numpy as np
+import json
 import pandas as pd
 import torch
 from motrack.library.cv import BBox
@@ -29,10 +30,12 @@ logger = logging.getLogger('CameltrackFeaturesExtraction')
 class CamelTrackParser:
     def __init__(
         self,
+        dataset_name: str,
         states_path: str,
         temporary_dirpath: str,
         samples_path: Optional[str] = None
     ):
+        self._dataset_name = dataset_name
         self._states_path = states_path
         self._temporary_path = temporary_dirpath
         self._samples_path = samples_path
@@ -76,6 +79,7 @@ class CamelTrackParser:
             scene_name = Path(file_path).parent.parent.name
             self._scene_mapping[scene_name] = video_id
         self._scene_mapping = dict(sorted(self._scene_mapping.items()))
+        logger.info(f'Scene mapping:\n{json.dumps(self._scene_mapping, indent=2)}')
 
         logger.info(f'Extracting scene files...')
         self._scene_files.clear()
@@ -93,6 +97,12 @@ class CamelTrackParser:
             else:
                 raise ValueError(f'Unexpected filename "{filename}"!')
 
+        logger.info(f'Scene files: {list(self._scene_files.keys())}')
+
+        if self._samples_path is None:
+            return
+
+        assert os.path.exists(self._samples_path), f'Path does not exist: {self._samples_path}'
         logger.info(f'Extracting track ids...')
         temporary_samples_path = os.path.join(self._temporary_path, 'samples')
         Path(temporary_samples_path).mkdir(parents=True, exist_ok=True)
@@ -103,9 +113,11 @@ class CamelTrackParser:
 
         for filename, filepath in zip(pickle_filenames, pickle_filepaths):
             video_id = int(filename.replace('.pkl', '').replace('sample_', ''))
+            if self._dataset_name == 'MOT17':
+                if video_id >= 8:
+                    continue
             scene_name = reverse_scene_mapping[video_id]
             self._scene_files[scene_name]['samples'] = filepath
-
 
     def close(self):
         if os.path.exists(self._temporary_path):
@@ -120,6 +132,8 @@ class CamelTrackParser:
 
     def get_scene_dfs(self, scene: str) -> Dict[str, pd.DataFrame]:
         if scene not in self._cache:
+            if self._dataset_name == 'MOT17':
+                scene = '-'.join(scene.split('-')[:2])
             scene_files = self._scene_files[scene]
             scene_data: Dict[str, pd.DataFrame] = {}
 
@@ -224,12 +238,14 @@ def add_track_ids(pred_frame_data: List[dict], gt_frame_data: List[FrameObjectDa
 @pipeline.task('cameltrack-features-extraction')
 def main(cfg: GlobalConfig) -> None:
     # Hardcoded stuff
-    SPLIT = 'train'
-    is_test = (SPLIT == 'test')
-    CAMELTRACK_STATES_PATH = f'/media/home/cameltrack-states/dancetrack-{SPLIT}.pklz'
-    CAMELTRACK_SAMPLES_PATH = f'/media/home/data/DanceTrack/states/camel_training/camel_{SPLIT}.pklz'
+    DATASET_NAME = 'SoccerNet'
+    SPLIT = 'val'
+    is_test = True # (SPLIT == 'test')
+    CAMELTRACK_STATES_PATH = f'/media/home/cameltrack-states/sn.pklz'
+    CAMELTRACK_SAMPLES_PATH = None # f'/media/home/data/MOT17/states/camel_training/camel_{SPLIT}.pklz' if not is_test else None
     TEMPORARY_DIRPATH = '/media/home/cameltrack-states/extraction-tmp'
-    EXTRACTED_OUTPUT_PATH = '/media/home/cameltrack-states/extracted-features-v2'
+    EXTRACTED_OUTPUT_PATH = '/media/home/cameltrack-states/extracted-features-soccernet'
+    THRESHOLD = 0.7
 
     dataset_index = dataset_index_factory(
         name=cfg.dataset.index.type,
@@ -240,6 +256,7 @@ def main(cfg: GlobalConfig) -> None:
     # Code
     n_total_matches, n_total_unmatches = 0, 0
     with CamelTrackParser(
+        dataset_name=DATASET_NAME,
         states_path=CAMELTRACK_STATES_PATH,
         samples_path=CAMELTRACK_SAMPLES_PATH,
         temporary_dirpath=TEMPORARY_DIRPATH
@@ -252,10 +269,10 @@ def main(cfg: GlobalConfig) -> None:
                 pred_frame_data = parser.get(scene_name, frame_index)
                 pred_frame_data = postprocess_data(scene_info, pred_frame_data)
 
-                if not is_test or not parser.has_samples:
+                if False: # DEPRECATED (not is_test or not parser.has_samples):
                     object_ids = dataset_index.get_objects_present_in_scene_at_frame(scene_name, frame_index)
                     gt_frame_data = [dataset_index.get_object_data_label_by_frame_index(object_id, frame_index) for object_id in object_ids]
-                    pred_frame_data, n_matches, n_unmatches = add_track_ids(pred_frame_data, gt_frame_data)
+                    pred_frame_data, n_matches, n_unmatches = add_track_ids(pred_frame_data, gt_frame_data, threshold=THRESHOLD)
                     n_total_matches += n_matches
                     n_total_unmatches += n_unmatches
                 else:

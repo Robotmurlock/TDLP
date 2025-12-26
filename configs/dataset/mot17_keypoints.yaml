@@ -1,0 +1,16 @@
+defaults:
+  - dancetrack_keypoints.yaml
+
+index:
+  type: mot
+  params:
+    paths:
+      - /media/home/data/MOT17
+
+feature_extractor:
+  extractor_params:
+    prediction_path: /media/home/cameltrack-states/extracted-features-mot17
+
+
+n_tracks: 140
+clip_length: 50

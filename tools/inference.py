@@ -1,36 +1,42 @@
 import copy
 import json
-from typing import Optional, List, Tuple
+import logging
+import math
+import time
+from typing import List, Optional, Tuple
 
-import hydra
 import numpy as np
-import torch
-from motrack.evaluation.io import TrackerInferenceWriter
-from motrack.library.cv.bbox import PredBBox, BBox
-from motrack.object_detection import DetectionManager
-from motrack.tools.postprocess import run_tracker_postprocess
-from motrack.tools.visualize import run_visualize_tracker_inference
-from motrack.tracker import Tracker
-from motrack.tracker.matching.utils import hungarian
-from motrack.tracker.tracklet import Tracklet, TrackletState
-from motrack.utils.collections import unpack_n
-from motrack.utils.lookup import LookupTable
-from torch import nn
-from torch.nn import functional as F
 from tqdm import tqdm
 
+import hydra
 from mot_jepa.architectures.tdcp.core import MultiModalTDCP, MultiModalTDSP
 from mot_jepa.common import conventions
 from mot_jepa.common.project import CONFIGS_PATH
 from mot_jepa.config_parser import GlobalConfig
 from mot_jepa.datasets.dataset import dataset_index_factory
 from mot_jepa.datasets.dataset.common.data import VideoClipData, VideoClipPart
-from mot_jepa.datasets.dataset.feature_extractor.pred_bbox_feature_extractor import PredictionBBoxFeatureExtractor, SupportedFeatures
+from mot_jepa.datasets.dataset.feature_extractor.pred_bbox_feature_extractor import (
+    PredictionBBoxFeatureExtractor,
+    SupportedFeatures,
+)
 from mot_jepa.datasets.dataset.motrack import MotrackDatasetWrapper
 from mot_jepa.datasets.dataset.transform import Transform
 from mot_jepa.utils import pipeline
 from mot_jepa.utils.extra_features import ExtraFeaturesReader
-import logging
+from motrack.evaluation.io import TrackerInferenceWriter
+from motrack.library.cv.bbox import BBox, PredBBox
+from motrack.object_detection import DetectionManager
+from motrack.tools.postprocess import run_tracker_postprocess
+from motrack.tools.visualize import run_visualize_tracker_inference
+from motrack.tracker import Tracker
+from motrack.tracker import SortTracker
+from motrack.tracker.matching.utils import hungarian
+from motrack.tracker.tracklet import Tracklet, TrackletState
+from motrack.utils.collections import unpack_n
+from motrack.utils.lookup import LookupTable
+import torch
+from torch import nn
+from torch.nn import functional as F
 
 
 logger = logging.getLogger('Inference')
@@ -81,7 +87,8 @@ class MyTracker(Tracker):
         self,
         tracklets: List[Tracklet],
         objects_data: List[dict],
-        frame_index: int
+        frame_index: int,
+        frame: Optional[np.ndarray] = None,
     ) -> VideoClipData:
         n_tracks = len(tracklets)
         n_detections = len(objects_data)
@@ -161,7 +168,8 @@ class MyTracker(Tracker):
         tracklets: List[Tracklet],
         objects_data: List[dict],
         frame_index: int,
-        sim_threshold: float
+        sim_threshold: float,
+        frame: Optional[np.ndarray] = None,
     ) -> Tuple[List[Tuple[int, int]], List[int], List[int]]:
         n_tracks = len(tracklets)
         n_detections = len(objects_data)
@@ -170,7 +178,7 @@ class MyTracker(Tracker):
         elif n_detections == 0:
             return [], list(range(n_tracks)), []
 
-        data = self._convert_data(tracklets, objects_data, frame_index)
+        data = self._convert_data(tracklets, objects_data, frame_index, frame=frame)
         data = self._transform(data)
         data.apply(lambda x: x.unsqueeze(0).to(self._device))
 
@@ -204,13 +212,30 @@ class MyTracker(Tracker):
             cost_matrix = (ema_track_mm_features @ det_mm_features.T).numpy()
             cost_matrix = 1 - (cost_matrix + 1) / 2 # [-1, 1] -> [0, 1]
         elif isinstance(self._model, MultiModalTDSP):
-            logits, _ = self._model(
-                data.observed.features,
-                data.observed.mask,
-                data.unobserved.features,
-                data.unobserved.mask
-            )
-            probas = torch.sigmoid(logits).cpu().numpy()
+            BATCH_SIZE = 1000
+            n_batches = math.ceil(data.unobserved.mask.shape[1] / BATCH_SIZE)
+            batch_logit_list = []
+            for batch_index in range(n_batches):
+                batch_start = batch_index * BATCH_SIZE
+                batch_end = min(batch_start + BATCH_SIZE, data.unobserved.mask.shape[1])
+                batch_features = {k: v[:, batch_start:batch_end] for k, v in data.unobserved.features.items()}
+                batch_mask = data.unobserved.mask[:, batch_start:batch_end]
+                try:
+                    batch_logits, _ = self._model(
+                        data.observed.features, 
+                        data.observed.mask, 
+                        batch_features, 
+                        batch_mask
+                    )
+                except:
+                    print(f'{n_tracks=}, {n_detections=}, {batch_start=}, {batch_end=}')
+                    observed_feature_shapes = {k: v.shape for k, v in data.observed.features.items()}
+                    batch_feature_shapes = {k: v.shape for k, v in batch_features.items()}
+                    print(f'{data.observed.mask.shape=}, {batch_mask.shape=}, {observed_feature_shapes=}, {batch_feature_shapes=}')
+                    raise
+                batch_logit_list.append(batch_logits.cpu())
+            logits = torch.cat(batch_logit_list, dim=1)
+            probas = torch.sigmoid(logits).numpy()
             cost_matrix = 1 - probas[0, :n_tracks, :n_detections]
 
         else:
@@ -229,12 +254,18 @@ class MyTracker(Tracker):
         _, _ = frame, detections  # Ignored (for now)
         scene_name = self.get_scene()
         objects_data = self._extra_features_reader.read(scene_name, frame_index)
+        # objects_data = [
+        #     {
+        #         'bbox_xywh': detection.as_numpy_xywh().tolist(),
+        #         'bbox_conf': detection.conf,
+        #     } for detection in detections
+        # ]
         objects_data = [data for data in objects_data if data['bbox_conf'] > self._detection_threshold]
         detections = [PredBBox.create(BBox.from_xywh(*data['bbox_xywh']), label='pedestrian', conf=data['bbox_conf']) for data in objects_data]
 
         # Remove deleted
         tracklets = [t for t in tracklets if t.state != TrackletState.DELETED]
-        matches, unmatched_tracklets, unmatched_detections = self._association(tracklets, objects_data, frame_index, sim_threshold=self._sim_threshold)
+        matches, unmatched_tracklets, unmatched_detections = self._association(tracklets, objects_data, frame_index, sim_threshold=self._sim_threshold, frame=frame)
 
         # Handle matches
         for t_i, d_i in matches:
@@ -251,7 +282,8 @@ class MyTracker(Tracker):
         for t_i in unmatched_tracklets:
             tracklet = tracklets[t_i]
 
-            if tracklet.lost_time > self._remember_threshold or tracklet.age < 0:  # 3 -> 1
+            lost_time = (frame_index - tracklet.frame_index) if tracklet.frame_index is not None else 0
+            if lost_time > self._remember_threshold or tracklet.age < self._initialization_threshold:  # 3 -> 1
                 tracklet.state = TrackletState.DELETED
             else:
                 tracklet.state = TrackletState.LOST
@@ -285,6 +317,7 @@ class MyTracker(Tracker):
 @hydra.main(config_path=CONFIGS_PATH, config_name='default', version_base='1.2')
 @pipeline.task('inference')
 def main(cfg: GlobalConfig) -> None:
+    assert cfg.eval.tracker is not None, 'Tracker config is required for inference.'
     torch.set_printoptions(precision=3, sci_mode=None)
 
     dataset_index = dataset_index_factory(
@@ -318,35 +351,40 @@ def main(cfg: GlobalConfig) -> None:
     experiment_path = conventions.get_experiment_path(cfg.path.master, cfg.dataset_name, cfg.experiment_name)
     tracker_active_output = conventions.get_inference_path(
         experiment_path=experiment_path,
-        inference_type=conventions.InferenceType.ACTIVE
+        split=cfg.eval.split,
+        inference_type=conventions.InferenceType.ACTIVE,
     )
     tracker_all_output = conventions.get_inference_path(
         experiment_path=experiment_path,
-        inference_type=conventions.InferenceType.ALL
+        split=cfg.eval.split,
+        inference_type=conventions.InferenceType.ALL,
+
     )
     tracker_postprocess_output = conventions.get_inference_path(
         experiment_path=experiment_path,
+        split=cfg.eval.split,
         inference_type=conventions.InferenceType.POSTPROCESS
     )
 
+    is_mot17 = cfg.dataset_name.startswith('MOT17')
     tracker = MyTracker(
         transform=cfg.dataset.build_transform(),
         model=model,
         extra_features_reader=extra_features_reader,
         device=cfg.resources.accelerator,
-        remember_threshold=150,
+        remember_threshold=cfg.eval.tracker.remember_threshold,
         use_conf=True,
-        detection_threshold=0.1,
-        sim_threshold=0.99,
-        initialization_threshold=1,
-        new_tracklet_detection_threshold=0.4
+        detection_threshold=cfg.eval.tracker.detection_threshold,
+        sim_threshold=cfg.eval.tracker.sim_threshold,
+        initialization_threshold=cfg.eval.tracker.initialization_threshold,
+        new_tracklet_detection_threshold=cfg.eval.tracker.new_tracklet_detection_threshold
     )
 
     # DanceTrack exp111:
     # remember_threshold=50,
     # detection_threshold=0.4,
     # sim_threshold=0.985,
-    # initialization_threshold=1,
+    # initialization_threshold=3,
     # new_tracklet_detection_threshold=0.9
 
     # SportsMOT exp04:
@@ -355,6 +393,23 @@ def main(cfg: GlobalConfig) -> None:
     # sim_threshold=0.99,
     # initialization_threshold=1,
     # new_tracklet_detection_threshold=0.4
+
+    # BEE24 exp01
+    # remember_threshold=50,
+    # detection_threshold=0.6,
+    # sim_threshold=0.35,
+    # initialization_threshold=0,
+    # new_tracklet_detection_threshold=0.60
+
+    # MOT17 exp01
+    # remember_threshold=50,
+    # detection_threshold=0.5,
+    # sim_threshold=0.95,
+    # initialization_threshold=0,
+    # new_tracklet_detection_threshold=0.55
+
+    detector_times = []
+    association_times = []
 
     scene_names = dataset_index.scenes
     for scene_name in tqdm(scene_names):
@@ -367,13 +422,28 @@ def main(cfg: GlobalConfig) -> None:
         tracker.set_scene(scene_name)
         tracklets = []
         with TrackerInferenceWriter(tracker_active_output, scene_name, image_height=imheight, image_width=imwidth,
-                                    clip=True) as tracker_active_inf_writer, \
+                                    clip=(not is_mot17)) as tracker_active_inf_writer, \
                 TrackerInferenceWriter(tracker_all_output, scene_name, image_height=imheight, image_width=imwidth,
-                                       clip=True) as tracker_all_inf_writer:
+                                       clip=(not is_mot17)) as tracker_all_inf_writer:
             for frame_index in tqdm(range(scene_length), desc=f'Tracking "{scene_name}"', unit='frame'):
+                start_time = time.time()
                 detections = detection_manager.predict(scene_name, frame_index)
-                tracklets = tracker.track(tracklets, detections, frame_index)
+                objects_data = extra_features_reader.read(scene_name, frame_index)
+                # objects_data = [
+                #     {
+                #         'bbox_xywh': detection.as_numpy_xywh().tolist(),
+                #         'bbox_conf': detection.conf,
+                #     } for detection in detections
+                # ]
+                objects_data = [data for data in objects_data if data['bbox_conf'] > 0.1]
+                detections = [PredBBox.create(BBox.from_xywh(*data['bbox_xywh']), label='pedestrian', conf=data['bbox_conf']) for data in objects_data]
 
+                end_time = time.time()
+                detector_times.append(end_time - start_time)
+                start_time = time.time()
+                tracklets = tracker.track(tracklets, detections, frame_index)
+                end_time = time.time()
+                association_times.append(end_time - start_time)
                 active_tracklets = [t for t in tracklets if t.state == TrackletState.ACTIVE]
 
                 # Save inference
@@ -383,20 +453,25 @@ def main(cfg: GlobalConfig) -> None:
                 for tracklet in tracklets:
                     tracker_all_inf_writer.write(frame_index, tracklet)
 
-    if cfg.eval.postprocess:
+    if cfg.eval.postprocess_enable:
         run_tracker_postprocess(
             dataset=motrack_dataset_wrapper,
             tracker_active_output=tracker_active_output,
             tracker_all_output=tracker_all_output,
-            tracker_postprocess_output=tracker_postprocess_output
+            tracker_postprocess_output=tracker_postprocess_output,
+            postprocess_cfg=cfg.eval.postprocess,
+            clip=(not is_mot17)
         )
 
     if cfg.eval.visualize:
         run_visualize_tracker_inference(
             dataset=motrack_dataset_wrapper,
             tracker_active_output=tracker_active_output,
-            tracker_output_option=tracker_all_output if not cfg.eval.postprocess else tracker_postprocess_output
+            tracker_output_option=tracker_all_output if not cfg.eval.postprocess_enable else tracker_postprocess_output
         )
+
+    print(f'Detector time: {np.mean(detector_times)}')
+    print(f'Association time: {np.mean(association_times)}')
 
 
 if __name__ == '__main__':

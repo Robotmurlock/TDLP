@@ -1,0 +1,211 @@
+defaults:
+  - the_global_config
+  - _self_
+
+experiment_name: exp04-fromExp03-Mem150
+dataset_name: SoccerNet
+resources:
+  batch_size: 8
+  accelerator: cuda:0
+  num_workers: 20
+  val_batch_size: 16
+dataset:
+  index:
+    type: mot
+    params:
+      paths:
+      - /media/home/SoccerNet
+    sequence_list: null
+  n_tracks: 25
+  clip_length: 150
+  min_clip_tracks: 1
+  clip_sampling_step: 1
+  val_clip_sampling_step: 1
+  feature_extractor:
+    extractor_type: pred_bbox
+    extractor_params:
+      prediction_path: /media/home/cameltrack-states/extracted-features-soccernet
+      extra_false_positives: true
+      feature_names:
+      - bbox
+      - keypoints
+      - appearance
+  transform:
+    _target_: mot_jepa.datasets.dataset.transform.ComposeTransform
+    transforms:
+    - _target_: mot_jepa.datasets.dataset.transform.BBoxXYWHtoXYXY
+    - _target_: mot_jepa.datasets.dataset.transform.BBoxMinMaxScaling
+    - _target_: mot_jepa.datasets.dataset.transform.FeatureFODStandardization
+      coord_mean:
+        bbox:
+        - 0.5
+        - 0.5
+        - 0.5
+        - 0.5
+        - 0.5
+        keypoints:
+        - - 35
+          - - 0.5
+      coord_std:
+        bbox:
+        - 0.1
+        - 0.1
+        - 0.1
+        - 0.1
+        - 1.0
+        keypoints:
+        - - 17
+          - - 0.1
+            - 0.1
+        - 1.0
+      fod_mean:
+        bbox:
+        - 0.0
+        - 0.0
+        - 0.0
+        - 0.0
+        - 0.0
+        keypoints:
+        - - 35
+          - - 0.0
+      fod_std:
+        bbox:
+        - 0.05
+        - 0.05
+        - 0.05
+        - 0.05
+        - 1.0
+        keypoints:
+        - - 17
+          - - 0.05
+            - 0.05
+        - 1.0
+      fod_time_scaled: true
+  augmentations:
+    _target_: mot_jepa.datasets.dataset.augmentations.base.CompositionAugmentation
+    augmentations:
+    - _target_: mot_jepa.datasets.dataset.augmentations.bbox.BBoxGaussianNoiseAugmentation
+      sigma: 0.05
+      proba: 0.4
+      unobs_noise: true
+    - _target_: mot_jepa.datasets.dataset.augmentations.bbox.BBoxGaussianNoiseAugmentation
+      sigma: 0.1
+      proba: 0.1
+      unobs_noise: true
+    - _target_: mot_jepa.datasets.dataset.augmentations.bbox.BBoxGaussianNoiseAugmentation
+      sigma: 0.25
+      proba: 0.05
+      unobs_noise: true
+    - _target_: mot_jepa.datasets.dataset.augmentations.video.PointOcclusionAugmentations
+      drop_ratio: 0.3
+    - _target_: mot_jepa.datasets.dataset.augmentations.video.LeftOrRightOcclusionAugmentations
+      drop_ratio: 0.2
+    - _target_: mot_jepa.datasets.dataset.augmentations.video.IdentitySwitchAugmentation
+      switch_ratio: 0.3
+    - _target_: mot_jepa.datasets.dataset.augmentations.appearance.AppearanceNoiseAugmentation
+      alpha: 0.4
+    - _target_: mot_jepa.datasets.dataset.augmentations.video.SmartIdentitySwitchAugmentation
+      switch_ratio: 0.5
+      iou_threshold: 0.5
+      max_switch_ratio: 0.5
+  sampler: null
+  use_batch_sampler: false
+train:
+  max_epochs: 10
+  loss_config:
+    _target_: mot_jepa.trainer.losses.bce.ClipLevelBCE
+    pos_weight: 10.0
+    assoc_threshold: 0.01
+  optimizer_config:
+    _target_: torch.optim.AdamW
+    lr: 1.0e-05
+    weight_decay: 0.001
+  scheduler_config:
+    _target_: mot_jepa.trainer.scheduler.create_warmup_cosine_annealing_scheduler
+    n_warmup_epochs: 1
+  gradient_clip: 1.0
+  mixed_precision: true
+  resume: false
+  truncate: false
+  checkpoint_cfg:
+    metric_monitor: val-epoch/loss
+    resume_from: null
+model_config:
+  _target_: mot_jepa.architectures.tdcp.core.build_mm_tdsp_model
+  mm_dim: 1024
+  similarity_prediction_head_hidden_dim: 1024
+  sph_common_params:
+    hidden_dim: 512
+  sph_per_feature_params:
+    bbox:
+      hidden_dim: 512
+    keypoints:
+      hidden_dim: 512
+    appearance:
+      hidden_dim: 512
+  common_params:
+    hidden_dim: 512
+    dropout: 0.1
+    track_encoder_n_heads: 8
+    track_encoder_n_layers: 4
+    track_encoder_ffn_dim: 1024
+    projector_intermediate_dim: 512
+    interaction_encoder_enable: true
+    interaction_encoder_n_heads: 8
+    interaction_encoder_n_layers: 4
+    interaction_encoder_ffn_dim: 1024
+  per_feature_params:
+    bbox:
+      feature_encoder_type: motion
+      feature_encoder_params:
+        input_dim: 5
+    keypoints:
+      feature_encoder_type: motion
+      feature_encoder_params:
+        input_dim: 35
+    appearance:
+      hidden_dim: 512
+      feature_encoder_type: parts_appearance
+      feature_encoder_params:
+        emb_size: 128
+        hidden_dim: 512
+      track_encoder_enable_motion_encoder: false
+      track_encoder_ffn_dim: 1024
+      interaction_encoder_ffn_dim: 1024
+  aggregator_type: sum
+  aggregator_params: {}
+  per_feature_checkpoint:
+    bbox: /media/home/MOT-JEPA-outputs/experiments/SportsMOT/exp04b-fromExp03-Mem150/checkpoints/last.pt
+    keypoints: /media/home/MOT-JEPA-outputs/experiments/SportsMOT/exp04k-fromExp03-Mem150/checkpoints/last.pt
+    appearance: /media/home/MOT-JEPA-outputs/experiments/SportsMOT/exp04a-fromExp03-Mem150/checkpoints/last.pt
+  object_interaction_encoder_enable: true
+  object_interaction_encoder_params:
+    hidden_dim: ${model_config.mm_dim}
+    n_heads: 8
+    n_layers: 2
+    dropout: 0.1
+path:
+  master: /media/home/MOT-JEPA-outputs
+eval:
+  object_detection:
+    type: 'yolox'
+    params:
+      accelerator: cuda:0
+      conf: 0.1
+      min_bbox_area: 100
+      # Model source: https://github.com/ifzhang/ByteTrack, ByteTrack_ablation
+      model_path: /media/home/models/detection/sportsmot.pth.tar
+    lookup_path: /media/home/models/detection/sportsmot.lookup.json
+    oracle: false
+    cache_path: '/workspace/motrack/soccernet_yolox'  # Inference on the second run is 10-20 times faster
+  tracker:
+    remember_threshold: 150
+    detection_threshold: 0.1
+    new_tracklet_detection_threshold: 0.4
+    initialization_threshold: 1
+    sim_threshold: 0.99
+  split: val
+  checkpoint: /media/home/MOT-JEPA-outputs/experiments/SportsMOT/exp04-fromExp03-Mem150/checkpoints/last.pt
+  visualize: false
+  postprocess_enable: true
+analysis: null

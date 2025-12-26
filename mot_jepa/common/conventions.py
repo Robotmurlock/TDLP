@@ -121,18 +121,19 @@ def get_inferences_path(experiment_path: str) -> str:
     return os.path.join(experiment_path, INFERENCES_DIRNAME)
 
 
-def get_inference_path(experiment_path: str, inference_type: InferenceType) -> str:
+def get_inference_path(experiment_path: str, split: str, inference_type: InferenceType) -> str:
     """
     Gets the inference type path.
 
     Args:
         experiment_path: Path to experiment
+        split: Split
         inference_type: Inference type (all, active, postprocess, etc.)
 
     Returns:
         Inference path
     """
-    return os.path.join(get_inferences_path(experiment_path), inference_type.value)
+    return os.path.join(get_inferences_path(experiment_path), split, inference_type.value)
 
 
 def get_config_dirpath(experiment_path: str) -> str:

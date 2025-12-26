@@ -160,6 +160,8 @@ class BBoxMinMaxScaling(Transform):
 
         # Compute min and max values
         valid_bboxes = all_bboxes[~all_masks].view(-1, 2)
+        if valid_bboxes.shape[0] == 0:
+            return data
         min_val = valid_bboxes.min(dim=0).values
         max_val = valid_bboxes.max(dim=0).values
         scale = max_val - min_val

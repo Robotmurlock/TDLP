@@ -1,5 +1,5 @@
 _target_: mot_jepa.architectures.tdcp.core.build_mm_tdcp_model
-mm_dim: 512
+mm_dim: 1024
 common_params:
   hidden_dim: 256
   dropout: 0.1

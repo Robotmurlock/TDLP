@@ -56,6 +56,17 @@ aggregator_params: {}
 #   keypoints: /media/home/MOT-JEPA-outputs/experiments/SportsMOT/exp04k-fromExp03-Mem150/checkpoints/last.pt
 #   appearance: /media/home/MOT-JEPA-outputs/experiments/SportsMOT/exp04a-fromExp03-Mem150/checkpoints/last.pt
 
+# MOT17 (exp01)
+# per_feature_checkpoint:
+#   bbox: /media/home/MOT-JEPA-outputs/experiments/MOT17/exp02b-fromExp01-Mem30/checkpoints/last.pt
+#   keypoints: /media/home/MOT-JEPA-outputs/experiments/MOT17/exp02k-fromExp01-Mem30/checkpoints/last.pt
+#   appearance: /media/home/MOT-JEPA-outputs/experiments/MOT17/exp02a-fromExp01-Mem30/checkpoints/last.pt
+
+per_feature_checkpoint:
+  bbox: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp113b-fromExp111-NoMotionEncoder/checkpoints/last.pt
+  keypoints: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp113k-fromExp111-NoMotionEncoder/checkpoints/last.pt
+  appearance: /media/home/MOT-JEPA-outputs/experiments/DanceTrack/exp113a-fromExp111-NoMotionEncoder/checkpoints/last.pt
+
 object_interaction_encoder_enable: true
 object_interaction_encoder_params:
   hidden_dim: ${model_config.mm_dim}
