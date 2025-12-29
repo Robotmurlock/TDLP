@@ -1,6 +1,6 @@
 # TDLP
 
-Official implementation of the paper **Learning Association via Track–Detection Matching for Multi-Object Tracking**, delivering state-of-the-art results on DanceTrack, SportsMOT, SoccerNet, and BEE24.
+Official implementation of the paper [Learning Association via Track–Detection Matching for Multi-Object Tracking](https://arxiv.org/html/2512.22105v1), delivering state-of-the-art results on DanceTrack, SportsMOT, SoccerNet, and BEE24.
 
 ## Paper
 **Title:** Learning Association via Track–Detection Matching for Multi-Object Tracking
@@ -53,3 +53,17 @@ can also use the [forked](https://github.com/Robotmurlock/TrackEval) repo with f
 - [ ] Remove YOLOX dependency.
 - [ ] Add Ultralytics YOLO support.
 - [ ] Create package.
+
+## Citation
+
+```bibtex
+@misc{tdlp,
+  title         = {Learning Association via Track-Detection Matching for Multi-Object Tracking},
+  author        = {Momir Ad{\v{z}}emovi{\'c}},
+  year          = {2025},
+  eprint        = {2512.22105},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+  doi           = {10.48550/arXiv.2512.22105}
+}
+```
