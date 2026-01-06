@@ -1,3 +1,4 @@
+"""Triplet loss variants for clip-level and batch-level embeddings."""
 import torch
 from pytorch_metric_learning import losses
 from pytorch_metric_learning import miners
@@ -7,6 +8,7 @@ from tdlp.trainer.losses.base import VideoClipLoss
 
 
 class ClipLevelTripletLoss(VideoClipLoss):
+    """Computes triplet loss independently for each clip."""
     def __init__(self, margin: float = 0.5, type_of_triplets: str = 'all'):
         super().__init__()
         self._miner = miners.TripletMarginMiner(margin=margin, type_of_triplets=type_of_triplets)
@@ -22,7 +24,7 @@ class ClipLevelTripletLoss(VideoClipLoss):
         Returns:
             Dictionary containing loss and additional debug information
         """
-        B, N, E = track_x.shape
+        B, N, _ = track_x.shape
         agg_track_mask = track_mask.all(dim=-1)  # shape: (B, N), True indicates missing
         track_labels = torch.arange(N).to(track_x).unsqueeze(0).repeat(B, 1).long()
         det_labels = torch.arange(N).to(det_x).unsqueeze(0).repeat(B, 1).long()
@@ -32,7 +34,7 @@ class ClipLevelTripletLoss(VideoClipLoss):
         track_predictions_list = []
         det_predictions_list = []
 
-        losses = []
+        loss_values = []
         for b_i in range(B):
             sub_track_labels = track_labels[b_i][~agg_track_mask[b_i]]
             sub_det_labels = det_labels[b_i][~detection_mask[b_i]]
@@ -46,12 +48,12 @@ class ClipLevelTripletLoss(VideoClipLoss):
 
             hard_pairs = self._miner(sub_embeddings, sub_labels)
             sub_loss = self._loss_func(sub_embeddings, sub_labels, hard_pairs)
-            losses.append(sub_loss)
+            loss_values.append(sub_loss)
 
-            distances = torch.cdist(sub_embeddings[:sub_track_x.shape[0]], sub_embeddings[-sub_det_x.shape[0]:], p=2)
+            distance_matrix = torch.cdist(sub_embeddings[:sub_track_x.shape[0]], sub_embeddings[-sub_det_x.shape[0]:], p=2)
 
-            sub_track_predictions = torch.argmin(distances, dim=1)
-            sub_det_predictions = torch.argmin(distances, dim=0)
+            sub_track_predictions = torch.argmin(distance_matrix, dim=1)
+            sub_det_predictions = torch.argmin(distance_matrix, dim=0)
             track_predictions_list.append(sub_track_predictions)
             det_predictions_list.append(sub_det_predictions)
 
@@ -61,7 +63,7 @@ class ClipLevelTripletLoss(VideoClipLoss):
         track_predictions = torch.cat(track_predictions_list)
         det_predictions = torch.cat(det_predictions_list)
 
-        loss = sum(losses) / len(losses)
+        loss = sum(loss_values) / len(loss_values)
         return {
             'loss': loss,
             'track_loss': loss,
@@ -76,6 +78,7 @@ class ClipLevelTripletLoss(VideoClipLoss):
 
 
 class BatchLevelTripletLoss(VideoClipLoss):
+    """Computes triplet loss across the full batch."""
     def __init__(self, margin: float = 0.5, type_of_triplets: str = 'all'):
         super().__init__()
         self._miner = miners.TripletMarginMiner(margin=margin, type_of_triplets=type_of_triplets)
@@ -91,7 +94,7 @@ class BatchLevelTripletLoss(VideoClipLoss):
         Returns:
             Dictionary containing loss and additional debug information
         """
-        B, N, E = track_x.shape
+        B, N, _ = track_x.shape
         agg_track_mask = track_mask.all(dim=-1) # shape: (B, N), True indicates missing
         global_track_labels = torch.arange(B * N).to(track_x).long()
         global_det_labels = torch.arange(B * N).to(det_x).long()

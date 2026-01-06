@@ -1,12 +1,24 @@
+"""Samplers for building batches grouped by scene."""
+from collections.abc import Hashable
 import math
 import random
-from typing import Dict, Iterator, List, Sequence, Hashable
+from typing import Dict, Iterator, List, Sequence
 
 from torch.utils.data import Sampler
+
 from tdlp.datasets.dataset.mot import MOTClipDataset
 
 
 def _group_indices_by_scene(scene_ids: Sequence[str]) -> Dict[str, List[int]]:
+    """
+    Group indices by scene.
+
+    Args:
+        scene_ids: Sequence of scene IDs.
+
+    Returns:
+        Dictionary of scene IDs and their corresponding indices.
+    """
     by_scene: Dict[str, List[int]] = {}
     for indices, s in enumerate(scene_ids):
         by_scene.setdefault(s, []).append(indices)
@@ -37,6 +49,15 @@ class SceneBatchSamplerNoRepeat(Sampler[List[int]]):
         shuffle_frames: bool = True,
         seed: int = 0,
     ) -> None:
+        """
+        Args:
+            scene_ids: List of scene IDs.
+            n_scenes: Number of distinct scenes per batch.
+            n_frames: Number of frames per scene in a batch.
+            shuffle_scenes: Whether to shuffle scene order each epoch.
+            shuffle_frames: Whether to shuffle frames within each scene each epoch.
+            seed: Base RNG seed.
+        """
         super().__init__()
         self._scene_ids = scene_ids
         self._n_scenes = n_scenes
@@ -63,6 +84,15 @@ class SceneBatchSamplerNoRepeat(Sampler[List[int]]):
         shuffle_frames: bool = True,
         seed: int = 0,
     ):
+        """
+        Args:
+            dataset: Dataset.
+            n_scenes: Number of distinct scenes per batch.
+            n_frames: Number of frames per scene in a batch.
+            shuffle_scenes: Whether to shuffle scene order each epoch.
+            shuffle_frames: Whether to shuffle frames within each scene each epoch.
+            seed: Base RNG seed.
+        """
         return cls(
             scene_ids=dataset.scene_names_per_frame,
             n_scenes=n_scenes,
@@ -133,6 +163,15 @@ class SceneBatchSamplerWithRepeat(Sampler[List[int]]):
         shuffle_frames: bool = True,
         seed: int = 0,
     ) -> None:
+        """
+        Args:
+            scene_ids: List of scene IDs.
+            n_scenes: Number of distinct scenes per batch.
+            n_frames: Number of frames per scene in a batch.
+            shuffle_scenes: Whether to shuffle scene order each epoch.
+            shuffle_frames: Whether to shuffle frames within each scene each epoch.
+            seed: Base RNG seed.
+        """
         super().__init__()
         self._scene_ids = scene_ids
         self._n_scenes = n_scenes
@@ -163,6 +202,15 @@ class SceneBatchSamplerWithRepeat(Sampler[List[int]]):
         shuffle_frames: bool = True,
         seed: int = 0,
     ):
+        """
+        Args:
+            dataset: Dataset.
+            n_scenes: Number of distinct scenes per batch.
+            n_frames: Number of frames per scene in a batch.
+            shuffle_scenes: Whether to shuffle scene order each epoch.
+            shuffle_frames: Whether to shuffle frames within each scene each epoch.
+            seed: Base RNG seed.
+        """
         return cls(
             scene_ids=dataset.scene_names_per_frame,
             n_scenes=n_scenes,
@@ -241,6 +289,14 @@ class OneSceneWithRangeSampler(Sampler[List[int]]):
         shuffle_scenes: bool = True,
         seed: int = 0,
     ) -> None:
+        """
+        Args:
+            scene_ids: List of scene IDs.
+            n_scenes: Number of distinct scenes per batch.
+            n_frames: Number of consecutive frames per scene in a batch.
+            shuffle_scenes: Whether to shuffle scene order each epoch.
+            seed: Base RNG seed.
+        """
         super().__init__()
         self._scene_ids = scene_ids
         self._n_scenes = n_scenes
@@ -265,7 +321,6 @@ class OneSceneWithRangeSampler(Sampler[List[int]]):
             # Number of possible consecutive ranges of length n_frames
             num_ranges = len(indices) - self._n_frames + 1
             total_samples += num_ranges
-        
         self._num_batches = math.ceil(total_samples / self._n_scenes)
 
     @classmethod
@@ -277,6 +332,14 @@ class OneSceneWithRangeSampler(Sampler[List[int]]):
         shuffle_scenes: bool = True,
         seed: int = 0,
     ):
+        """
+        Args:
+            dataset: Dataset.
+            n_scenes: Number of distinct scenes per batch.
+            n_frames: Number of consecutive frames per scene in a batch.
+            shuffle_scenes: Whether to shuffle scene order each epoch.
+            seed: Base RNG seed.
+        """
         return cls(
             scene_ids=dataset.scene_names_per_frame,
             n_scenes=n_scenes,
@@ -284,6 +347,11 @@ class OneSceneWithRangeSampler(Sampler[List[int]]):
             shuffle_scenes=shuffle_scenes,
             seed=seed,
         )
+
+    @property
+    def valid_scenes(self) -> Dict[str, List[int]]:
+        """Valid scenes."""
+        return self._valid_scenes
 
     def __len__(self) -> int:
         return self._num_batches
@@ -305,26 +373,25 @@ class OneSceneWithRangeSampler(Sampler[List[int]]):
         # Group samples into batches, ensuring each scene appears only once per batch
         batch_samples = []
         used_scenes_in_batch = set()
-        
         for scene_id, frames in all_samples:
             # If we already have this scene in current batch, skip
             if scene_id in used_scenes_in_batch:
                 continue
-                
+
             batch_samples.append((scene_id, frames))
             used_scenes_in_batch.add(scene_id)
-            
+
             # When we have enough scenes for a batch, yield it
             if len(batch_samples) >= self._n_scenes:
                 batch: List[int] = []
                 for _, frames in batch_samples:
                     batch.extend(frames)
                 yield batch
-                
+
                 # Reset for next batch
                 batch_samples = []
                 used_scenes_in_batch = set()
-        
+
         # Yield remaining samples as final batch if any
         if batch_samples:
             batch: List[int] = []
@@ -367,28 +434,27 @@ def run_test_one_scene_with_range_sampler() -> None:
         n_frames=3
     )
 
-    print("OneSceneWithRangeSampler test:")
-    print(f"Scene distribution: {dict(_group_indices_by_scene(scene_ids))}")
-    print(f"Valid scenes: {list(batch_sampler._valid_scenes.keys())}")
-    print(f"Total batches: {len(batch_sampler)}")
-    
+    print('OneSceneWithRangeSampler test:')
+    print(f'Scene distribution: {dict(_group_indices_by_scene(scene_ids))}')
+    print(f'Valid scenes: {list(batch_sampler.valid_scenes.keys())}')
+    print(f'Total batches: {len(batch_sampler)}')
     for i, batch in enumerate(batch_sampler):
         batch_scene_ids = [scene_ids[b_i] for b_i in batch]
-        print(f"Batch {i}: indices={batch}, scenes={batch_scene_ids}")
-        
+        print(f'Batch {i}: indices={batch}, scenes={batch_scene_ids}')
+
         # Verify consecutive frames within each scene
         scene_groups = {}
         for idx, scene_id in zip(batch, batch_scene_ids):
             if scene_id not in scene_groups:
                 scene_groups[scene_id] = []
             scene_groups[scene_id].append(idx)
-        
+
         for scene_id, indices in scene_groups.items():
             # Check if indices are consecutive
             sorted_indices = sorted(indices)
-            is_consecutive = all(sorted_indices[i] == sorted_indices[i-1] + 1 
+            is_consecutive = all(sorted_indices[i] == sorted_indices[i-1] + 1
                                for i in range(1, len(sorted_indices)))
-            print(f"  Scene {scene_id}: indices={sorted_indices}, consecutive={is_consecutive}")
+            print(f'  Scene {scene_id}: indices={sorted_indices}, consecutive={is_consecutive}')
 
 
 if __name__ == '__main__':

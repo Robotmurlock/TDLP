@@ -1,4 +1,6 @@
+"""Tests for the expand_pattern function."""
 import pytest
+
 from tdlp.datasets.dataset.transform.utils import expand_pattern
 
 

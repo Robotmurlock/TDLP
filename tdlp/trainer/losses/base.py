@@ -1,10 +1,13 @@
-from torch import nn
-import torch
-from typing import Dict, Optional
+"""Base loss interfaces for video clip losses."""
 from abc import ABC, abstractmethod
+from typing import Dict, Optional
+
+import torch
+from torch import nn
 
 
 class VideoClipLoss(nn.Module, ABC):
+    """Abstract base for losses operating on video clips."""
     @abstractmethod
     def forward(
         self,

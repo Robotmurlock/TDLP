@@ -1,12 +1,15 @@
+"""Common data structures for dataset clips."""
 from dataclasses import dataclass, asdict
-from typing import Dict, Optional, Callable
-from tdlp.common.data import JSON
+from typing import Callable, Dict, Optional
 
 import torch
+
+from tdlp.common.data import JSON
 
 
 @dataclass
 class VideoClipPart:
+    """Portion of a clip representing observed or unobserved data."""
     ids: Optional[torch.Tensor]
     ts: torch.Tensor
     mask: torch.Tensor
@@ -34,6 +37,7 @@ class VideoClipPart:
 
 @dataclass
 class VideoClipData:
+    """Pair of observed and unobserved clip parts."""
     observed: VideoClipPart
     unobserved: VideoClipPart
 

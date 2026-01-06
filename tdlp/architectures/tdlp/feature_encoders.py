@@ -42,6 +42,7 @@ class MotionEncoder(nn.Module):
 
 
 class PartsAppearanceEncoder(nn.Module):
+    """Encodes part-based appearance embeddings into a shared hidden space."""
     NUM_PARTS = 6
 
     def __init__(self, emb_size: int, hidden_dim: int, dropout: float = 0.1):

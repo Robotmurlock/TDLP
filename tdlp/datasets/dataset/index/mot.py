@@ -76,7 +76,7 @@ class MOTDatasetIndex(DatasetIndex):
             split=split,
             sequence_list=sequence_list
         )
-        test = (split == 'test')
+        test = split == 'test'
 
         if isinstance(paths, str):
             paths = [paths]
@@ -337,7 +337,7 @@ class MOTDatasetIndex(DatasetIndex):
             # Return empty labels
             return data, present_object_ids, n_labels
 
-        for scene_name, scene_info in tqdm(scene_infos.items(), unit='scene', total=len(scene_infos), desc=f'Indexing'):
+        for scene_name, scene_info in tqdm(scene_infos.items(), unit='scene', total=len(scene_infos), desc='Indexing'):
             scene_info = self._scene_info_index[scene_name]
             n_scene_labels, data, present_object_ids = self._parse_scene_labels(
                 scene_info=scene_info,

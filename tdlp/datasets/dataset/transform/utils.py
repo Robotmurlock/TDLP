@@ -1,3 +1,4 @@
+"""Helpers for working with transform configuration patterns."""
 from collections.abc import Sequence
 from typing import Any, List
 

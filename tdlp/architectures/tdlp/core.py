@@ -4,6 +4,9 @@ import copy
 import logging
 from typing import Any, Dict, Optional, Set, Tuple
 
+import torch
+from torch import nn
+
 from tdlp.architectures.tdlp import utils as tdcp_utils
 from tdlp.architectures.tdlp.aggregators import TDCPAggregator, tdcp_aggregator_factory
 from tdlp.architectures.tdlp.feature_encoders import feature_encoder_factory
@@ -11,8 +14,6 @@ from tdlp.architectures.tdlp.object_interaction_encoder import ObjectInteraction
 from tdlp.architectures.tdlp.projector import TrackToDetectionProjector
 from tdlp.architectures.tdlp.similarity_prediction import TDSPMLPHead
 from tdlp.architectures.tdlp.track_encoder import TrackEncoder
-import torch
-from torch import nn
 
 logger = logging.getLogger('Architecture')
 
@@ -45,6 +46,7 @@ class TrackDetectionContrastivePrediction(nn.Module):
 
     @property
     def output_dim(self) -> int:
+        """Output dimension."""
         return self._projector.output_dim
 
     def forward(
@@ -54,16 +56,6 @@ class TrackDetectionContrastivePrediction(nn.Module):
         det_x: torch.Tensor,
         det_mask: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Args:
-            track_x: Track tensor of shape ``(B, N, T, 2D)`` containing static and
-                motion features concatenated along the last dimension.
-            track_mask: Boolean mask for ``track_x``.
-            det_x: Detection tensor of shape ``(B, M, D)``.
-            det_mask: Boolean mask for ``det_x``.
-
-        Returns:
-            Tuple ``(projected_track_features, detection_features)``.
-        """
         det_features = self._static_encoder(det_x)
 
         if self._motion_encoder is not None:
@@ -79,9 +71,9 @@ class TrackDetectionContrastivePrediction(nn.Module):
         if self._object_interaction_encoder is not None:
             agg_track_mask = track_mask.all(dim=-1)
             projected_features, det_features = self._object_interaction_encoder(
-                projected_features, 
-                agg_track_mask, 
-                det_features, 
+                projected_features,
+                agg_track_mask,
+                det_features,
                 det_mask
             )
 
@@ -89,6 +81,7 @@ class TrackDetectionContrastivePrediction(nn.Module):
 
 
 class MultiModalTDCP(nn.Module):
+    """Multi-modal TDCP wrapper handling per-feature models and aggregation."""
     def __init__(
         self,
         tdcps: Dict[str, TrackDetectionContrastivePrediction],
@@ -96,6 +89,13 @@ class MultiModalTDCP(nn.Module):
         aggregator: TDCPAggregator,
         object_interaction_encoder: Optional[ObjectInteractionEncoder] = None
     ):
+        """
+        Args:
+            tdcps: Dictionary of TDCP models for each feature.
+            mm_dim: Dimension of the multi-modal features.
+            aggregator: Aggregator for the multi-modal features.
+            object_interaction_encoder: Optional object interaction encoder.
+        """
         super().__init__()
         self._mm_dim = mm_dim
 
@@ -109,13 +109,16 @@ class MultiModalTDCP(nn.Module):
 
     @property
     def output_dim(self) -> int:
+        """Output dimension."""
         return self._mm_dim
 
     @property
     def feature_names(self) -> Set[str]:
+        """Feature names."""
         return set(self._tdcps.keys())
 
     def get_tdcp(self, feature_name: str) -> TrackDetectionContrastivePrediction:
+        """Get the TDCP model for a given feature name."""
         return self._tdcps[feature_name]
 
     def forward(
@@ -143,9 +146,9 @@ class MultiModalTDCP(nn.Module):
         if self._object_interaction_encoder is not None:
             agg_track_mask = track_mask.all(dim=-1)
             agg_track_features, agg_det_features = self._object_interaction_encoder(
-                agg_track_features, 
-                agg_track_mask, 
-                agg_det_features, 
+                agg_track_features,
+                agg_track_mask,
+                agg_det_features,
                 det_mask
             )
 
@@ -160,7 +163,8 @@ class TrackDetectionSimilarityPrediction(nn.Module):
         tdcp: TrackDetectionContrastivePrediction,
         similarity_prediction_head: TDSPMLPHead
     ) -> None:
-        """Args:
+        """
+        Args:
             tdcp: Temporal encoder for track sequences.
             similarity_prediction_head: MLP head for similarity prediction.
         """
@@ -181,12 +185,19 @@ class TrackDetectionSimilarityPrediction(nn.Module):
 
 
 class MultiModalTDSP(nn.Module):
+    """Multi-modal TDSP wrapper handling per-feature models and aggregation."""
     def __init__(
         self,
         mm_tdcp: MultiModalTDCP,
         sphs: Dict[str, TDSPMLPHead],
         mm_sph: TDSPMLPHead
     ) -> None:
+        """
+        Args:
+            mm_tdcp: Multi-modal TDCP model.
+            sphs: Dictionary of SPH models for each feature.
+            mm_sph: Multi-modal SPH model.
+        """
         super().__init__()
         self._mm_tdcp = mm_tdcp
         self._sphs = nn.ModuleDict(sphs)
@@ -194,6 +205,7 @@ class MultiModalTDSP(nn.Module):
 
     @property
     def feature_names(self) -> Set[str]:
+        """Feature names."""
         return set(self._sphs.keys())
 
     def forward(
@@ -211,7 +223,6 @@ class MultiModalTDSP(nn.Module):
             det_features=det_features,
             det_mask=det_mask,
         )
-        
         agg_logits = self._mm_sph(agg_track_features, agg_det_features)
         sphs_logits = {
             key: sph(track_features[key], det_features[key])
@@ -306,6 +317,23 @@ def build_mm_tdcp_model(
     tdcps_prefix: str = '_tdcps',
     mm_linear_layers_prefix: str = '_mm_linear_layers'
 ) -> MultiModalTDCP:
+    """Build a multi-modal TDCP model with default components.
+
+    Args:
+        per_feature_params: Per-feature parameters.
+        common_params: Common parameters.
+        mm_dim: Dimension of the multi-modal features.
+        aggregator_type: Type of the aggregator.
+        aggregator_params: Aggregator parameters.
+        per_feature_checkpoint: Per-feature checkpoint.
+        object_interaction_encoder_enable: Whether to include the object interaction encoder.
+        object_interaction_encoder_params: Object interaction encoder parameters.
+        tdcps_prefix: Prefix for the TDCP models.
+        mm_linear_layers_prefix: Prefix for the multi-modal linear layers.
+
+    Returns:
+        Instantiated :class:`MultiModalTDCP` model.
+    """
     per_feature_checkpoint = per_feature_checkpoint or {}
     state_dicts: Dict[str, Dict[str, Any]] = {
         feature_name: torch.load(per_feature_checkpoint[feature_name])['model']
@@ -321,7 +349,7 @@ def build_mm_tdcp_model(
             logger.info(f'Loading checkpoint for {feature_name} from {per_feature_checkpoint[feature_name]}')
             state_dict = state_dicts[feature_name]
             state_dict = {
-                k.replace(f'{tdcps_prefix}.{feature_name}.', ''): v 
+                k.replace(f'{tdcps_prefix}.{feature_name}.', ''): v
                 for k, v in state_dict.items()
                 if k.startswith(f'{tdcps_prefix}.{feature_name}.')
             }
@@ -350,11 +378,11 @@ def build_mm_tdcp_model(
         if feature_name in per_feature_checkpoint:
             state_dict = state_dicts[feature_name]
             state_dict = {
-                k.replace(f'{mm_linear_layers_prefix}.{feature_name}.', ''): v 
+                k.replace(f'{mm_linear_layers_prefix}.{feature_name}.', ''): v
                 for k, v in state_dict.items()
                 if k.startswith(f'{mm_linear_layers_prefix}.{feature_name}.')
             }
-            mm_tdcp._mm_linear_layers[feature_name].load_state_dict(state_dict)
+            mm_tdcp._mm_linear_layers[feature_name].load_state_dict(state_dict)  # pylint: disable=protected-access
 
     return mm_tdcp
 
@@ -376,8 +404,29 @@ def build_tdsp_model(
     interaction_encoder_n_layers: int = 6,
     interaction_encoder_ffn_dim: int = 512,
     similarity_prediction_head_hidden_dim: int = 256,
-    tdcps_prefix: str = '_tdcp._tdcps'
 ) -> TrackDetectionSimilarityPrediction:
+    """Build a TDSP model with default components.
+
+    Args:
+        feature_encoder_type: Feature encoder type
+        feature_encoder_params: Feature encoder parameters
+        hidden_dim: Shared embedding dimension across modules.
+        dropout: Dropout rate used in all components.
+        track_encoder_n_heads: Number of attention heads in the track encoder.
+        track_encoder_n_layers: Number of transformer layers in the track encoder.
+        track_encoder_ffn_dim: Feed-forward dimension in the track encoder.
+        track_encoder_enable_motion_encoder: Enable motion encoder (use if FoD is applied in the transform function)
+        projector_intermediate_dim: Hidden dimension of the projector MLP.
+        interaction_encoder_enable: Whether to include the interaction encoder.
+        interaction_encoder_n_heads: Attention heads for the interaction encoder.
+        interaction_encoder_n_layers: Layers in the interaction encoder.
+        interaction_encoder_ffn_dim: Feed-forward dimension for the interaction encoder.
+        similarity_prediction_head_hidden_dim: Hidden dimension of the similarity prediction head.
+        tdcps_prefix: Prefix for the TDCP models.
+
+    Returns:
+        Instantiated :class:`TrackDetectionSimilarityPrediction` model.
+    """
     tdcp = build_tdcp_model(
         feature_encoder_type=feature_encoder_type,
         feature_encoder_params=feature_encoder_params,
@@ -392,7 +441,6 @@ def build_tdsp_model(
         interaction_encoder_n_heads=interaction_encoder_n_heads,
         interaction_encoder_n_layers=interaction_encoder_n_layers,
         interaction_encoder_ffn_dim=interaction_encoder_ffn_dim,
-        tdcps_prefix=tdcps_prefix
     )
     similarity_prediction_head = TDSPMLPHead(
         input_dim=hidden_dim,
@@ -419,6 +467,26 @@ def build_mm_tdsp_model(
     tdcps_prefix: str = '_mm_tdcp._tdcps',
     tdcp_mm_linear_layers_prefix: str = '_mm_tdcp._mm_linear_layers'
 ) -> MultiModalTDSP:
+    """Build a multi-modal TDSP model with default components.
+
+    Args:
+        per_feature_params: Per-feature parameters.
+        common_params: Common parameters.
+        sph_per_feature_params: Per-feature parameters for the SPH models.
+        sph_common_params: Common parameters for the SPH models.
+        mm_dim: Dimension of the multi-modal features.
+        aggregator_type: Type of the aggregator.
+        aggregator_params: Aggregator parameters.
+        similarity_prediction_head_hidden_dim: Hidden dimension of the similarity prediction head.
+        object_interaction_encoder_enable: Whether to include the object interaction encoder.
+        object_interaction_encoder_params: Object interaction encoder parameters.
+        per_feature_checkpoint: Per-feature checkpoint.
+        tdcps_prefix: Prefix for the TDCP models.
+        tdcp_mm_linear_layers_prefix: Prefix for the multi-modal linear layers.
+
+    Returns:
+        Instantiated :class:`MultiModalTDSP` model.
+    """
     mm_tdcp = build_mm_tdcp_model(
         per_feature_params=per_feature_params,
         common_params=common_params,
@@ -443,7 +511,7 @@ def build_mm_tdsp_model(
             logger.info(f'Loading SPH checkpoint for {key} from {per_feature_checkpoint[key]}')
             state_dict = torch.load(per_feature_checkpoint[key])['model']
             state_dict = {
-                k.replace(f'_sphs.{key}.', ''): v 
+                k.replace(f'_sphs.{key}.', ''): v
                 for k, v in state_dict.items()
                 if k.startswith(f'_sphs.{key}')
             }

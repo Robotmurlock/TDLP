@@ -1,13 +1,24 @@
+"""
+Online tracker for TDLP.
+
+Disclaimer: Only supports bbox features.
+
+Tracker implementation is based on the motrack library.
+Source: https://github.com/Robotmurlock/Motrack/
+"""
 import copy
 import math
 from typing import List, Optional, Tuple
-
-import numpy as np
 
 from motrack.library.cv.bbox import PredBBox
 from motrack.tracker import Tracker
 from motrack.tracker.matching.utils import hungarian
 from motrack.tracker.tracklet import Tracklet, TrackletState
+import numpy as np
+import torch
+from torch import nn
+from torch.nn import functional as F
+
 from tdlp.architectures.tdlp.core import MultiModalTDCP, MultiModalTDSP
 from tdlp.datasets.dataset.common.data import VideoClipData, VideoClipPart
 from tdlp.datasets.dataset.feature_extractor.pred_bbox_feature_extractor import (
@@ -15,9 +26,6 @@ from tdlp.datasets.dataset.feature_extractor.pred_bbox_feature_extractor import 
     SupportedFeatures,
 )
 from tdlp.datasets.dataset.transform import Transform
-import torch
-from torch import nn
-from torch.nn import functional as F
 
 
 class TDLPOnlineTracker(Tracker):
@@ -67,7 +75,7 @@ class TDLPOnlineTracker(Tracker):
         self._model.to(device)
         self._model.eval()
 
-        self._feature_names = set([SupportedFeatures(feature_name) for feature_name in self._model.feature_names])
+        self._feature_names = {SupportedFeatures(feature_name) for feature_name in self._model.feature_names}
 
         self._detection_threshold = detection_threshold
         self._sim_threshold = sim_threshold
@@ -85,15 +93,30 @@ class TDLPOnlineTracker(Tracker):
         tracklets: List[Tracklet],
         objects_data: List[dict],
         frame_index: int,
-        frame: Optional[np.ndarray] = None,
     ) -> VideoClipData:
+        """
+        Converts tracklets and detections raw features into a VideoClipData consisting of PyTorch tensor inputs.
+        Steps:
+        1. Determine the maximum size of the cost matrix.
+           - For implementation simplicity, we use the maximum of the number of tracks and detections.
+        2. Convert the raw observed data into a VideoClipData (structured set of tensors).
+        3. Convert the raw unobserved data into a VideoClipData (structured set of tensors).
+
+        Args:
+            tracklets: List of tracklets.
+            objects_data: List of detections.
+            frame_index: Index of the current frame.
+
+        Returns:
+            VideoClipData: Structured set of tensors.
+        """
         n_tracks = len(tracklets)
         n_detections = len(objects_data)
 
-        # Determine maximum size
+        # (1) Determine maximum size
         N = max(n_tracks, n_detections)
 
-        # Observed initialization
+        # (2) Observed data conversion
         observed_ts = torch.zeros(N, self._clip_length, dtype=torch.long)
         observed_temporal_mask = torch.ones(N, self._clip_length, dtype=torch.bool)
         observed_features = PredictionBBoxFeatureExtractor.initialize_features(
@@ -121,7 +144,7 @@ class TDLPOnlineTracker(Tracker):
                 observed_ts[t_i, relative_index] = hist_frame_index
                 observed_temporal_mask[t_i, relative_index] = False
 
-        # Unobserved initialization
+        # (3) Unobserved data conversion
         unobserved_features = PredictionBBoxFeatureExtractor.initialize_features(
             feature_names=self._feature_names,
             n_tracks=N,
@@ -166,8 +189,25 @@ class TDLPOnlineTracker(Tracker):
         objects_data: List[dict],
         frame_index: int,
         sim_threshold: float,
-        frame: Optional[np.ndarray] = None,
     ) -> Tuple[List[Tuple[int, int]], List[int], List[int]]:
+        """
+        Performs association between the tracks (tracklets) and detections (objects_data).
+
+        Two model types are supported:
+        - Link prediction model (TDLP) that performs per-frame association via link prediction between tracks and detections.
+        - Metric learning model (TDCP) that performs per-frame association via constrastive learning between tracks and detections.
+
+        Args:
+            tracklets: List of tracklets.
+            objects_data: List of detections.
+            frame_index: Index of the current frame.
+            sim_threshold: Similarity threshold to use for association.
+
+        Returns:
+            - Matches (list of tuples (tracklet index, detection index))
+            - Unmatched tracklets (list of tracklet indices)
+            - Unmatched detections (list of detection indices)
+        """
         n_tracks = len(tracklets)
         n_detections = len(objects_data)
         if n_tracks == 0:
@@ -175,7 +215,7 @@ class TDLPOnlineTracker(Tracker):
         elif n_detections == 0:
             return [], list(range(n_tracks)), []
 
-        data = self._convert_data(tracklets, objects_data, frame_index, frame=frame)
+        data = self._convert_data(tracklets, objects_data, frame_index)
         data = self._transform(data)
         data.apply(lambda x: x.unsqueeze(0).to(self._device))
 
@@ -202,19 +242,12 @@ class TDLPOnlineTracker(Tracker):
                 batch_end = min(batch_start + BATCH_SIZE, data.unobserved.mask.shape[1])
                 batch_features = {k: v[:, batch_start:batch_end] for k, v in data.unobserved.features.items()}
                 batch_mask = data.unobserved.mask[:, batch_start:batch_end]
-                try:
-                    batch_logits, _ = self._model(
-                        data.observed.features, 
-                        data.observed.mask, 
-                        batch_features, 
-                        batch_mask
-                    )
-                except:
-                    print(f'{n_tracks=}, {n_detections=}, {batch_start=}, {batch_end=}')
-                    observed_feature_shapes = {k: v.shape for k, v in data.observed.features.items()}
-                    batch_feature_shapes = {k: v.shape for k, v in batch_features.items()}
-                    print(f'{data.observed.mask.shape=}, {batch_mask.shape=}, {observed_feature_shapes=}, {batch_feature_shapes=}')
-                    raise
+                batch_logits, _ = self._model(
+                    data.observed.features,
+                    data.observed.mask,
+                    batch_features,
+                    batch_mask
+                )
                 batch_logit_list.append(batch_logits.cpu())
             logits = torch.cat(batch_logit_list, dim=1)
             probas = torch.sigmoid(logits).numpy()
@@ -224,7 +257,6 @@ class TDLPOnlineTracker(Tracker):
             raise ValueError(f'Unsupported model type: {type(self._model)}')
 
         cost_matrix[cost_matrix > sim_threshold] = np.inf
-
         return hungarian(cost_matrix)
 
     def track(self,
@@ -250,9 +282,24 @@ class TDLPOnlineTracker(Tracker):
         frame_index: int,
         frame: Optional[np.ndarray] = None
     ) -> List[Tracklet]:
-        # Remove deleted
+        """
+        Performs tracking (association) for a single frame.
+        Note: The only difference between the online and offline TDLP tracker is the initial data conversion:
+        - Online: Converts raw detector outputs into bbox feature dictionaries.
+        - Offline: Reads bbox feature dictionaries from a pickle file.
+
+        Args:
+            tracklets: List of tracklets.
+            detections: List of detections.
+            frame_index: Index of the current frame.
+            frame: Frame (unused).
+
+        Returns:
+            List of tracklets.
+        """
+        _ = frame  # Unused
         tracklets = [t for t in tracklets if t.state != TrackletState.DELETED]
-        matches, unmatched_tracklets, unmatched_detections = self._association(tracklets, objects_data, frame_index, sim_threshold=self._sim_threshold, frame=frame)
+        matches, unmatched_tracklets, unmatched_detections = self._association(tracklets, objects_data, frame_index, sim_threshold=self._sim_threshold)
 
         # Handle matches
         for t_i, d_i in matches:
@@ -284,7 +331,7 @@ class TDLPOnlineTracker(Tracker):
             if self._new_tracklet_detection_threshold is not None and detection.conf < self._new_tracklet_detection_threshold:
                 continue
 
-            new_tracklet = Tracklet(
+            new_tracklet = Tracklet(  # pylint: disable=unexpected-keyword-arg
                 bbox=copy.deepcopy(detection),
                 frame_index=frame_index,
                 _id=self._next_id,

@@ -1,9 +1,12 @@
+"""Bounding box augmentation utilities."""
+import torch
+
 from tdlp.datasets.dataset.augmentations.base import NonDeterministicAugmentation
 from tdlp.datasets.dataset.common.data import VideoClipData
-import torch
 
 
 class BBoxGaussianNoiseAugmentation(NonDeterministicAugmentation):
+    """Add Gaussian noise to bbox and keypoint features."""
     SUPPORTED_FEATURES = ['bbox', 'keypoints']
 
     """

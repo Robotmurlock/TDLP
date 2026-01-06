@@ -40,6 +40,7 @@ class FeatureExtractorConfig:
 
 @dataclass
 class DatasetConfig:
+    """Dataset construction configuration."""
     index: DatasetIndexConfig
     n_tracks: int
     clip_length: int
@@ -118,6 +119,7 @@ class TrainCheckpointConfig:
 
 @dataclass
 class TrainConfig:
+    """Training loop hyperparameters and checkpoint settings."""
     max_epochs: int
 
     loss_config: dict
@@ -183,6 +185,7 @@ class EvalDemoConfig:
 
 @dataclass
 class EvalConfig:
+    """Evaluation settings for object detection and tracking."""
     object_detection: EvalObjectDetectionConfig
     tracker: Optional[EvalTrackerConfig] = None
     split: str = 'val'
@@ -197,6 +200,7 @@ class EvalConfig:
 
 @dataclass
 class PathConfig:
+    """Paths to key directories such as outputs."""
     master: str
 
     @classmethod

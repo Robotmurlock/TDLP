@@ -1,21 +1,30 @@
+"""Abstract base class for feature extractors."""
 from abc import ABC, abstractmethod
 import logging
 from typing import Dict
 
+import torch
+
 from tdlp.datasets.dataset.common.data import VideoClipData, VideoClipPart
 from tdlp.datasets.dataset.index.index import DatasetIndex
-import torch
 
 logger = logging.getLogger('FeatureExtractor')
 
 
 class FeatureExtractor(ABC):
+    """Base interface for extracting clip features."""
     def __init__(
         self,
         index: DatasetIndex,
         object_id_mapping: Dict[str, int],
         n_tracks: int
     ):
+        """
+        Args:
+            index: Dataset index.
+            object_id_mapping: Object ID mapping.
+            n_tracks: Number of tracks.
+        """
         self._index = index
         self._object_id_mapping = object_id_mapping
         self._n_tracks = n_tracks
@@ -30,6 +39,20 @@ class FeatureExtractor(ABC):
         unobserved_start_time: int,
         unobserved_temporal_length: int,
     ) -> VideoClipData:
+        """
+        Extract the features for a given scene. This is performed in two steps: 
+        - Extract the common part of the clip, which includes the IDs, timestamps, and masks.
+        - Extract the extra data part of the clip, which includes the features.
+
+        Args:
+            scene_name: Name of the scene.
+            observed_start_index: Start index of the observed part.
+            observed_start_time: Start time of the observed part.
+            observed_temporal_length: Temporal length of the observed part.
+            unobserved_start_index: Start index of the unobserved part.
+            unobserved_start_time: Start time of the unobserved part.
+            unobserved_temporal_length: Temporal length of the unobserved part.
+        """
         return VideoClipData(
             observed=self._extract_part(
                 scene_name=scene_name,
@@ -57,6 +80,20 @@ class FeatureExtractor(ABC):
         unobserved_start_time: int,
         unobserved_temporal_length: int,
     ) -> VideoClipData:
+        """
+        Extract the features for a given scene. This is performed in two steps: 
+        - Extract the common part of the clip, which includes the IDs, timestamps, and masks.
+        - Extract the extra data part of the clip, which includes the features.
+
+        Args:
+            scene_name: Name of the scene.
+            observed_start_index: Start index of the observed part.
+            observed_start_time: Start time of the observed part.
+            observed_temporal_length: Temporal length of the observed part.
+            unobserved_start_index: Start index of the unobserved part.
+            unobserved_start_time: Start time of the unobserved part.
+            unobserved_temporal_length: Temporal length of the unobserved part.
+        """
         return self.extract(
             scene_name=scene_name,
             observed_start_index=observed_start_index,
@@ -75,6 +112,19 @@ class FeatureExtractor(ABC):
         temporal_length: int,
         observed: bool
     ) -> VideoClipPart:
+        """
+        Extract the common part of the clip, which includes the IDs, timestamps, and masks.
+
+        Args:
+            scene_name: Name of the scene.
+            start_index: Start index of the clip.
+            start_time: Start time of the clip.
+            temporal_length: Temporal length of the clip.
+            observed: Whether the clip is observed.
+
+        Returns:
+            Video clip part.
+        """
         video_clip_part = self._extract_common_part(
             scene_name=scene_name,
             start_index=start_index,
@@ -103,6 +153,20 @@ class FeatureExtractor(ABC):
         start_time: int,
         temporal_length: int,
     ) -> VideoClipPart:
+        """
+        Extract the common part of the clip, which includes the IDs, timestamps, and masks.
+        Note: `start_time` is not used in this implementation (back-compatibility with old code).
+
+        Args:
+            scene_name: Name of the scene.
+            start_index: Start index of the clip.
+            start_time: Start time of the clip.
+            temporal_length: Temporal length of the clip.
+
+        Returns:
+            Video clip part.
+        """
+        _ = start_time  # Unused
         end_index = start_index + temporal_length
         object_ids = sorted(self._index.get_objects_present_in_scene_clip(scene_name, start_index, end_index))
 
@@ -138,4 +202,14 @@ class FeatureExtractor(ABC):
         temporal_length: int,
         observed: bool
     ) -> VideoClipPart:
+        """
+        Extract the extra data part of the clip, which includes the features.
+
+        Args:
+            video_clip_part: Video clip part.
+            scene_name: Name of the scene.
+            start_index: Start index of the clip.
+            temporal_length: Temporal length of the clip.
+            observed: Whether the clip is observed.
+        """
         pass

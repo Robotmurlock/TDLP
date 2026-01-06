@@ -1,7 +1,8 @@
+"""Feature extractor for predicted bounding boxes and related features."""
+import enum
 import random
 from typing import Dict, List, Set
 
-import enum
 import torch
 
 from tdlp.datasets.dataset.common.data import VideoClipPart
@@ -17,13 +18,14 @@ class SupportedFeatures(enum.Enum):
 
 
 class PredictionBBoxFeatureExtractor(FeatureExtractor):
+    """Extract predicted bbox, keypoint, and appearance features."""
     BBOX_DIM = 5  # XYWHC
     KEYPOINTS_DIM = 35  # 17x2 XYC (per part) + 1 C (global) = 52
     APPEARANCE_NUM_PARTS = 6
-    APPEARANCE_PER_PART_DIM = 129 # 6x129 = 774
+    APPEARANCE_PER_PART_DIM = 129  # 6x129 = 774
     SUPPORTED_FEATURES = {
-        SupportedFeatures.BBOX, 
-        SupportedFeatures.KEYPOINTS, 
+        SupportedFeatures.BBOX,
+        SupportedFeatures.KEYPOINTS,
         SupportedFeatures.APPEARANCE,
     }
 
@@ -40,12 +42,23 @@ class PredictionBBoxFeatureExtractor(FeatureExtractor):
         random_appearance_jitter_ratio: float = 0.0,
         random_appearance_jitter_range: int = 0
     ):
+        """
+        Args:
+            index: Dataset index.
+            object_id_mapping: Object ID mapping.
+            n_tracks: Number of tracks.
+            prediction_path: Path to the prediction file.
+            feature_names: List of feature names.
+            extra_false_positives: Whether to add extra false positives.
+            random_appearance_jitter_ratio: Ratio of appearance jitter.
+            random_appearance_jitter_range: Range of appearance jitter.
+        """
         super().__init__(
             index=index,
             object_id_mapping=object_id_mapping,
             n_tracks=n_tracks
         )
-        is_train = (index.split == 'train')
+        is_train = index.split == 'train'
         feature_names = [SupportedFeatures(feature_name.lower()) for feature_name in feature_names]
         for feature_name in feature_names:
             assert feature_name in self.SUPPORTED_FEATURES, \
@@ -76,7 +89,20 @@ class PredictionBBoxFeatureExtractor(FeatureExtractor):
         return torch.tensor([*bbox, score], dtype=torch.float32)
 
     @staticmethod
-    def initialize_features(feature_names: Set[SupportedFeatures], n_tracks: int, temporal_length: int, is_train: bool = False) -> Dict[str, torch.Tensor]:
+    def initialize_features(
+        feature_names: Set[SupportedFeatures],
+        n_tracks: int,
+        temporal_length: int
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Initialize the feature tensors (bboxes, keypoints, and appearance).
+        Only initializes chosen set of features (defined by `feature_names`).
+
+        Args:
+            feature_names: List of feature names.
+            n_tracks: Number of tracks.
+            temporal_length: Temporal length of the clip.
+        """
         features: Dict[str, torch.Tensor] = {}
         if SupportedFeatures.BBOX in feature_names:
             features[SupportedFeatures.BBOX.value] = \
@@ -86,18 +112,35 @@ class PredictionBBoxFeatureExtractor(FeatureExtractor):
                 torch.zeros(n_tracks, temporal_length, PredictionBBoxFeatureExtractor.KEYPOINTS_DIM, dtype=torch.float32)
         if SupportedFeatures.APPEARANCE in feature_names:
             features[SupportedFeatures.APPEARANCE.value] = \
-                torch.zeros(n_tracks, temporal_length, PredictionBBoxFeatureExtractor.APPEARANCE_NUM_PARTS, PredictionBBoxFeatureExtractor.APPEARANCE_PER_PART_DIM, dtype=torch.float32)
+                torch.zeros(
+                    n_tracks,
+                    temporal_length,
+                    PredictionBBoxFeatureExtractor.APPEARANCE_NUM_PARTS,
+                    PredictionBBoxFeatureExtractor.APPEARANCE_PER_PART_DIM,
+                    dtype=torch.float32
+                )
 
         return features
 
     @staticmethod
     def set_features(
-        feature_names: Set[SupportedFeatures], 
-        features: Dict[str, torch.Tensor], 
-        object_index: int, 
-        clip_index: int, 
+        feature_names: Set[SupportedFeatures],
+        features: Dict[str, torch.Tensor],
+        object_index: int,
+        clip_index: int,
         data: dict
     ) -> None:
+        """
+        Set the feature values for a given object and clip.
+        Warning: Performs in-place modification of the feature tensors.
+
+        Args:
+            feature_names: List of feature names.
+            features: Dictionary of feature tensors.
+            object_index: Index of the object.
+            clip_index: Index of the clip.
+            data: Data dictionary.
+        """
         if SupportedFeatures.BBOX in feature_names:
             bbox = [*data['bbox_xywh'], data['bbox_conf']]
             features[SupportedFeatures.BBOX.value][object_index, clip_index, :] = torch.tensor(bbox, dtype=torch.float32)
@@ -116,6 +159,16 @@ class PredictionBBoxFeatureExtractor(FeatureExtractor):
         temporal_length: int,
         observed: bool
     ) -> VideoClipPart:
+        """
+        Extract the extra data part of the clip, which includes the features.
+
+        Args:
+            video_clip_part: Video clip part.
+            scene_name: Name of the scene.
+            start_index: Start index of the clip.
+            temporal_length: Temporal length of the clip.
+            observed: Whether the clip is observed.
+        """
         end_index = start_index + temporal_length
 
         object_ids = sorted(self._index.get_objects_present_in_scene_clip(scene_name, start_index, end_index))

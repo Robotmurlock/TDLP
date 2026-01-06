@@ -1,8 +1,9 @@
 """
 PyTorch's extension with simple functions
 """
+from collections.abc import Hashable
 from pathlib import Path
-from typing import Union, List, Tuple, Dict, Hashable, TYPE_CHECKING
+from typing import Dict, List, Tuple, TYPE_CHECKING, Union
 
 import torch
 from torch import nn

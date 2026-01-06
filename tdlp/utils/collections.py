@@ -1,5 +1,6 @@
+"""Collection helpers such as group_by."""
 from collections import defaultdict
-from typing import Callable, List, Dict, TypeVar
+from typing import Callable, Dict, List, TypeVar
 
 T = TypeVar('T')
 K = TypeVar('K')

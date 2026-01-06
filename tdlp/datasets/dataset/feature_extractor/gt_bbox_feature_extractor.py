@@ -1,3 +1,4 @@
+"""Feature extractor for ground-truth bounding boxes."""
 from typing import Dict, List
 
 import torch
@@ -5,10 +6,10 @@ import torch
 from tdlp.datasets.dataset.common.data import VideoClipPart
 from tdlp.datasets.dataset.feature_extractor.feature_extractor import FeatureExtractor
 from tdlp.datasets.dataset.index.index import DatasetIndex
-import torch
 
 
 class GTBBoxFeatureExtractor(FeatureExtractor):
+    """Extract ground-truth bbox tensors for clips."""
     BBOX_DIM = 5
 
     def __init__(
@@ -17,6 +18,12 @@ class GTBBoxFeatureExtractor(FeatureExtractor):
         object_id_mapping: Dict[str, int],
         n_tracks: int
     ):
+        """
+        Args:
+            index: Dataset index.
+            object_id_mapping: Object ID mapping.
+            n_tracks: Number of tracks.
+        """
         super().__init__(
             index=index,
             object_id_mapping=object_id_mapping,

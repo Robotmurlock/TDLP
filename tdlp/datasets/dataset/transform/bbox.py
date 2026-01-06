@@ -1,4 +1,5 @@
-from typing import List, Dict
+"""Bounding-box related transforms for dataset clips."""
+from typing import Dict, List
 
 import torch
 
@@ -8,7 +9,12 @@ from tdlp.datasets.dataset.transform.utils import expand_pattern
 
 
 class BBoxXYWHtoXYXY(Transform):
+    """Convert bbox format from (x, y, w, h) to (x1, y1, x2, y2)."""
     def __init__(self, keep_wh: bool = False):
+        """
+        Args:
+            keep_wh: Whether to keep the width and height.
+        """
         super().__init__(name='bbox_xywh_to_xyxy')
         self._keep_wh = keep_wh
 
@@ -24,13 +30,13 @@ class BBoxXYWHtoXYXY(Transform):
             data.unobserved.features['bbox'][..., 2:4] = unobserved_bottom_xy
         else:
             data.observed.features['bbox'] = torch.cat([
-                data.observed.features['bbox'][..., :2], 
-                observed_bottom_xy, 
+                data.observed.features['bbox'][..., :2],
+                observed_bottom_xy,
                 data.observed.features['bbox'][..., 2:]
             ], dim=-1)
             data.unobserved.features['bbox'] = torch.cat([
-                data.unobserved.features['bbox'][..., :2], 
-                unobserved_bottom_xy, 
+                data.unobserved.features['bbox'][..., :2],
+                unobserved_bottom_xy,
                 data.unobserved.features['bbox'][..., 2:]
             ], dim=-1)
 
@@ -38,11 +44,17 @@ class BBoxXYWHtoXYXY(Transform):
 
 
 class BBoxStandardization(Transform):
+    """Standardize bbox coordinates with provided mean/std."""
     def __init__(
         self,
         coord_mean: Dict[str, List[float]],
         coord_std: Dict[str, List[float]],
     ):
+        """
+        Args:
+            coord_mean: Mean of the coordinates.
+            coord_std: Standard deviation of the coordinates.
+        """
         super().__init__(name='feature_standardization')
 
         assert set(coord_mean.keys()) == set(coord_std.keys())
@@ -67,6 +79,7 @@ class BBoxStandardization(Transform):
 
 
 class FeatureFODStandardization(Transform):
+    """Standardize bbox features and augment with finite differences."""
     def __init__(
         self,
         coord_mean: Dict[str, List[float]],
@@ -75,6 +88,14 @@ class FeatureFODStandardization(Transform):
         fod_std: Dict[str, List[float]],
         fod_time_scaled: bool = False
     ):
+        """
+        Args:
+            coord_mean: Mean of the coordinates.
+            coord_std: Standard deviation of the coordinates.
+            fod_mean: Mean of the finite differences.
+            fod_std: Standard deviation of the finite differences.
+            fod_time_scaled: Whether to scale the finite differences by the time.
+        """
         super().__init__(name='feature_fod_standardization')
 
         assert set(coord_mean.keys()) == set(coord_std.keys()) == set(fod_mean.keys()) == set(fod_std.keys())
@@ -128,6 +149,7 @@ class FeatureFODStandardization(Transform):
 
 
 class BBoxMinMaxScaling(Transform):
+    """Scale bbox/keypoint coordinates to [0, 1] range."""
     def __init__(self):
         super().__init__(name='bbox_min_max_scaling')
 

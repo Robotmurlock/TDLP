@@ -23,9 +23,6 @@ from tdlp.datasets.dataset.feature_extractor import (
     GTBBoxFeatureExtractor,
     feature_extractor_factory,
 )
-from tdlp.datasets.dataset.feature_extractor.pred_bbox_feature_extractor import (
-    SupportedFeatures,
-)
 from tdlp.datasets.dataset.index.index import DatasetIndex
 from tdlp.datasets.dataset.transform import Transform
 from torch.utils.data import Dataset
@@ -62,7 +59,7 @@ class MOTClipDataset(Dataset):
             clip_sampling_step: Clip sampling step (subsamples dataset)
         """
         self._index = index
-        self._is_train = (index.split == 'train')
+        self._is_train = index.split == 'train'
 
         # Track parameters
         scene_with_max_tracks, max_tracks = index.get_max_tracks()
@@ -90,7 +87,7 @@ class MOTClipDataset(Dataset):
 
         # Features
         assert (feature_extractor_type is None) == (feature_extractor_params is None), \
-            f'Either set both type and params for feature extractor or neither!'
+            'Either set both type and params for feature extractor or neither!'
         if feature_extractor_type is None:
             logger.warning(f'Feature extractor not set, using {GTBBoxFeatureExtractor.__name__} as the default one!')
             self._feature_extractor = GTBBoxFeatureExtractor(
@@ -195,7 +192,7 @@ class MOTClipDataset(Dataset):
         for scene_name in index.scenes:
             object_ids.extend(index.get_objects_present_in_scene(scene_name))
 
-        assert len(object_ids) == len(set(object_ids)), f'Found unexpected object duplicates!'
+        assert len(object_ids) == len(set(object_ids)), 'Found unexpected object duplicates!'
         object_ids = sorted(object_ids)
         return {object_id: i for i, object_id in enumerate(object_ids)}
 
@@ -230,7 +227,7 @@ class MOTClipDataset(Dataset):
         Returns:
             Clip observed and unobserved bboxes, timestamps and temporal masks (6 elements)
         """
-        scene_name, start_index, end_index = self._clip_index[index]
+        scene_name, start_index, _ = self._clip_index[index]
 
         observed_end_index = start_index + self._clip_length
 
@@ -251,7 +248,7 @@ class MOTClipDataset(Dataset):
         return data.serialize()
 
     def visualize_scene(self, index: int) -> np.ndarray:
-        scene_name, start_index, end_index = self._clip_index[index]
+        scene_name, _, end_index = self._clip_index[index]
         scene_image_path = self._index.get_scene_image_path(scene_name, end_index)
         raw = self.get_raw(index)
 

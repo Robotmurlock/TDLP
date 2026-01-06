@@ -1,17 +1,22 @@
+"""Video-based augmentations for tracks and detections."""
 import math
 import random
 from typing import Dict, List, Tuple
 
+import torch
+
 from tdlp.datasets.dataset.augmentations.base import Augmentation
 from tdlp.datasets.dataset.common.data import VideoClipData, VideoClipPart
-import torch
 
 
 class PointOcclusionAugmentations(Augmentation):
-    """
-    Remove points of observed track (simulate occlusions)
-    """
+    """Remove points of observed track (simulate occlusions)."""
     def __init__(self, drop_ratio: float, occlude_unobs: bool = False):
+        """
+        Args:
+            drop_ratio: Probability of dropping a point.
+            occlude_unobs: Whether to occlude the unobserved part of the track.
+        """
         super().__init__()
         self._drop_ratio = drop_ratio
         self._occlude_unobs = occlude_unobs
@@ -39,7 +44,12 @@ class PointOcclusionAugmentations(Augmentation):
 
 
 class MaskFeatureAugmentation(Augmentation):
+    """Randomly zero-out selected features."""
     def __init__(self, drop_ratios: Dict[str, float]):
+        """
+        Args:
+            drop_ratios: Dictionary of feature names and their drop ratios.
+        """
         super().__init__()
         self._drop_ratios = drop_ratios
 
@@ -62,10 +72,13 @@ class MaskFeatureAugmentation(Augmentation):
 
 
 class LeftOrRightOcclusionAugmentations(Augmentation):
-    """
-    Remove the left or the right part of the observed track (simulate occlusions)
-    """
+    """Remove the left or right part of observed track (simulate occlusions)."""
     def __init__(self, drop_ratio: float, min_length: int = 1):
+        """
+        Args:
+            drop_ratio: Probability of dropping a point.
+            min_length: Minimum length of the track.
+        """
         super().__init__()
         self._drop_ratio = drop_ratio
         self._min_length = min_length
@@ -88,6 +101,7 @@ class LeftOrRightOcclusionAugmentations(Augmentation):
 
 
 class IdentitySwitchAugmentation(Augmentation):
+    """Randomly swap identities between tracks."""
     def __init__(self, switch_ratio: float):
         """
         Partially switch track identities (simulate identity switches).
@@ -126,6 +140,7 @@ class IdentitySwitchAugmentation(Augmentation):
 
 
 class SmartIdentitySwitchAugmentation(Augmentation):
+    """Identity switch augmentation based on IoU overlaps."""
     def __init__(self, switch_ratio: float, iou_threshold: float = 0.1, max_switch_ratio: float = 1.0):
         """
         Partially switch track identities, simulating realistic identity switches.
@@ -142,7 +157,7 @@ class SmartIdentitySwitchAugmentation(Augmentation):
     def apply(self, data: VideoClipData) -> VideoClipData:
         if 'bbox' not in data.observed.features:
             return data
-        
+
         n_tracks, _ = data.observed.mask.shape
 
         candidate_matrix, candidate_pair_matrix = self._compute_switch_candidates(data)
@@ -189,7 +204,7 @@ class SmartIdentitySwitchAugmentation(Augmentation):
         return candidate_points_matrix, candidate_pair_matrix
 
     def _calculate_iou_trajectory(self, boxes_a, boxes_b, mask_a, mask_b):
-        valid = (~mask_a & ~mask_b)
+        valid = ~mask_a & ~mask_b
         ious = torch.zeros(boxes_a.shape[0])
         valid_indices = torch.nonzero(valid).flatten()
 
@@ -271,8 +286,8 @@ def test_identity_switch_augmentation():
 
     augmented_data = augmentation.apply(data)
 
-    print("Original BBoxes:", data.observed.features['bbox'])
-    print("Augmented BBoxes:", augmented_data.observed.features['bbox'])
+    print('Original BBoxes:', data.observed.features['bbox'])
+    print('Augmented BBoxes:', augmented_data.observed.features['bbox'])
 
 
 if __name__ == '__main__':

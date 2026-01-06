@@ -1,6 +1,7 @@
+"""Aggregation layers for TDCP models."""
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Sequence, Dict, Any
+from typing import Any, Dict, Sequence
 
 import einops
 import torch
@@ -96,16 +97,25 @@ class TDCPQueryAttentionPool(TDCPAggregator):
 
     def forward(self, features: Sequence[Tensor]) -> Tensor:
         x = torch.stack(features, dim=2)  # [B, N, M, E]
-        B, N, M, _ = x.shape
+        B, N, _, _ = x.shape
         x = einops.rearrange(x, 'b n m e -> (b n) m e')
-        q = self.q.expand(B * N, -1, -1)     # [B, 1, E]
-        pooled, _ = self.attn(q, x, x)   # [B, 1, E]
+        q = self.q.expand(B * N, -1, -1)  # [B, 1, E]
+        pooled, _ = self.attn(q, x, x)  # [B, 1, E]
         pooled = self.out_norm(pooled[:, 0, :])  # [B, E]
         return einops.rearrange(pooled, '(b n) e -> b n e', b=B, n=N)
 
 
 class TDCPTransformer(nn.Module):
+    """Transformer-based aggregator."""
     def __init__(self, n_features: int, hidden_dim: int, n_heads: int = 4, n_layers: int = 1, dropout: float = 0.0):
+        """
+        Args:
+            n_features: Number of features.
+            hidden_dim: Hidden dimension.
+            n_heads: Number of attention heads.
+            n_layers: Number of transformer layers.
+            dropout: Dropout rate.
+        """
         super().__init__()
         self._type_emb = nn.Parameter(torch.randn(n_features, hidden_dim))  # [M, E]
         encoder_layer = nn.TransformerEncoderLayer(

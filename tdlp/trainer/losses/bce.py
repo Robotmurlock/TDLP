@@ -1,8 +1,8 @@
-from typing import Dict, Optional, List
+"""Binary cross-entropy based losses for clip and feature associations."""
+from typing import Dict, List, Optional
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
+from torch import nn
 
 
 def torch_combine(xs: List[torch.Tensor], dtype: torch.dtype) -> torch.Tensor:
@@ -29,11 +29,11 @@ class ClipLevelBCE(nn.Module):
     their differences. Uses BCE loss to classify whether embeddings belong to
     the same identity (positive) or different identities (negative).
     """
-    
+
     def __init__(
-        self, 
+        self,
         pos_weight: Optional[float] = 10.0,
-        assoc_threshold: float = 0.5, 
+        assoc_threshold: float = 0.5,
         fp_label_threshold: int = 1_000_000
     ) -> None:
         super().__init__()
@@ -70,7 +70,7 @@ class ClipLevelBCE(nn.Module):
         """
         B = logits.shape[0]
         _ = logits_dict  # unused
-        
+
         agg_track_mask = track_mask.all(dim=-1)
         agg_track_ids = track_ids.max(dim=-1).values
         mask = ~agg_track_mask.unsqueeze(-1) | ~detection_mask.unsqueeze(-2)
@@ -118,15 +118,15 @@ class ClipLevelBCE(nn.Module):
         self._k += 1
         if self._k % 100 == 0 and torch.numel(probas[mask]) > 0:
             print(
-                f'{probas[mask].mean()=}', 
-                f'{probas[mask].max()=}', 
-                f'{id_match_mask[mask].sum() / id_match_mask[mask].numel()=}', 
+                f'{probas[mask].mean()=}',
+                f'{probas[mask].max()=}',
+                f'{id_match_mask[mask].sum() / id_match_mask[mask].numel()=}',
                 f'{id_match_mask[mask].numel()=}'
             )
             print(
-                f'{filtered_track_labels_list[0]=}', 
-                f'{filtered_det_labels_list[0]=}', 
-                f'{track_predictions_list[0]=}', 
+                f'{filtered_track_labels_list[0]=}',
+                f'{filtered_det_labels_list[0]=}',
+                f'{track_predictions_list[0]=}',
                 f'{det_predictions_list[0]=}',
                 end='\n\n'
             )
@@ -135,7 +135,7 @@ class ClipLevelBCE(nn.Module):
         filtered_det_labels_list = torch_combine(filtered_det_labels_list, dtype=torch.long)
         track_predictions = torch_combine(track_predictions_list, dtype=torch.long)
         det_predictions = torch_combine(det_predictions_list, dtype=torch.long)
-        
+
         return {
             'loss': loss,
             'track_loss': loss,
@@ -217,32 +217,25 @@ class MultiFeatureBCELoss(nn.Module):
 def run_test() -> None:
     """Test function for ClipLevelBCE."""
     B, N, E = 2, 4, 8
-    
+
     # Create dummy difference embeddings
     diff_x = torch.randn(B, N, E)
-    
+
     # Create masks: some valid differences, some identity matches
     diff_mask = torch.tensor([[1, 1, 0, 1], [1, 0, 1, 1]], dtype=torch.bool)
     id_match_mask = torch.tensor([[1, 0, 1, 1], [1, 1, 0, 1]], dtype=torch.bool)
-    
+
     # Create optional feature dictionary
     diff_feature_dict = {'additional_feature': torch.randn(B, N, E)}
-    
+
     # Test the loss
     loss_fn = ClipLevelBCE()
-    outputs = loss_fn(
+    _ = loss_fn(
         diff_x=diff_x,
         diff_mask=diff_mask,
         diff_feature_dict=diff_feature_dict,
         id_match_mask=id_match_mask
     )
-    
-    print("BCE Loss outputs:")
-    for key, value in outputs.items():
-        if isinstance(value, torch.Tensor):
-            print(f"{key}: {value.shape} - {value.item() if value.numel() == 1 else 'tensor'}")
-        else:
-            print(f"{key}: {value}")
 
 
 if __name__ == '__main__':

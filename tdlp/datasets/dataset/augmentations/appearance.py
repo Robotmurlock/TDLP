@@ -1,6 +1,8 @@
+"""Appearance feature augmentations."""
+import torch
+
 from tdlp.datasets.dataset.augmentations.base import Augmentation
 from tdlp.datasets.dataset.common.data import VideoClipData
-import torch
 
 
 class AppearanceNoiseAugmentation(Augmentation):
@@ -12,6 +14,10 @@ class AppearanceNoiseAugmentation(Augmentation):
     the embeddings along the last dimension.
     """
     def __init__(self, alpha: float = 0.1):
+        """
+        Args:
+            alpha: Amount of noise to add.
+        """
         super().__init__()
         self._alpha = alpha
 

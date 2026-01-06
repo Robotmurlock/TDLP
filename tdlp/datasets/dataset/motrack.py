@@ -1,3 +1,4 @@
+"""Wrapper around Motrack dataset index to expose training utilities."""
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
@@ -9,6 +10,7 @@ from tdlp.datasets.dataset.index.mot import DatasetIndex
 
 # TODO: Move to Motrack?
 class MotrackDatasetWrapper(BaseDataset):
+    """Adapter mapping MOT dataset index to Motrack API."""
     def __init__(
         self,
         index: DatasetIndex,

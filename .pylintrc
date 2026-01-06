@@ -152,7 +152,8 @@ disable=abstract-method,
         keyword-arg-before-vararg,
         invalid-name,
         trailing-comma-tuple,
-        pointless-string-statement
+        pointless-string-statement,
+        too-many-positional-arguments
 
 
 [REPORTS]

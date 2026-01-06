@@ -8,6 +8,16 @@ from pathlib import Path
 import time
 from typing import Any, Dict, Optional, Union
 
+import torch
+from torch import distributed as dist
+from torch import nn
+from torch.cuda.amp import GradScaler, autocast
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.optim import Optimizer
+from torch.optim.lr_scheduler import LRScheduler
+from torch.utils.tensorboard import SummaryWriter
+from torch.utils.data import DataLoader
+
 from tdlp.architectures.tdlp.core import (
     MultiModalTDCP,
     MultiModalTDSP,
@@ -18,14 +28,6 @@ from tdlp.common.conventions import LAST_CKPT
 from tdlp.trainer import torch_distrib_utils
 from tdlp.trainer import torch_helper
 from tdlp.trainer.metrics import AccuracyMeter, LossDictMeter
-import torch
-from torch import distributed as dist
-from torch import nn
-from torch.cuda.amp import GradScaler, autocast
-from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.optim import Optimizer
-from torch.optim.lr_scheduler import LRScheduler
-from torch.utils.tensorboard import SummaryWriter
 
 logger = logging.getLogger('Trainer')
 
@@ -111,7 +113,7 @@ class ContrastiveTrainer:
         """
         if local_rank == -1:
             if device is None:
-                return f'cuda:0' if torch.cuda.is_available() else 'cpu'
+                return 'cuda:0' if torch.cuda.is_available() else 'cpu'
             else:
                 return device
         else:
@@ -291,6 +293,8 @@ class ContrastiveTrainer:
                     det_ids,
                     logits_dict
                 )
+            else:
+                raise TypeError(f'Unsupported model type: {type(self._model)}')
 
             return loss_dict
 

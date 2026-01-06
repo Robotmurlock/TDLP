@@ -1,14 +1,20 @@
+"""Offline tracker for TDLP.
+
+Note: 
+- Supports flexible set of input features. 
+- However, the repo only has support for bbox, appearance, and human pose points features.
+"""
 import logging
 from typing import List, Optional
 
-import numpy as np
-
 from motrack.library.cv.bbox import BBox, PredBBox
 from motrack.tracker.tracklet import Tracklet
+import numpy as np
+from torch import nn
+
 from tdlp.datasets.dataset.transform import Transform
 from tdlp.tracker.online import TDLPOnlineTracker
 from tdlp.utils.extra_features import ExtraFeaturesReader
-from torch import nn
 
 logger = logging.getLogger('TDLPOfflineTracker')
 

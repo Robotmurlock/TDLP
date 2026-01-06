@@ -1,4 +1,5 @@
-from typing import Union, Collection
+"""Shared tensor-related type aliases for dataset utilities."""
+from typing import Collection, Union
 
 import torch
 

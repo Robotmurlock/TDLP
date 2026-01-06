@@ -1,4 +1,5 @@
-from typing import Dict, Optional, List
+"""InfoNCE-based losses for tracking embeddings."""
+from typing import Dict, List, Optional
 
 import torch
 from pytorch_metric_learning import losses, distances, reducers
@@ -54,11 +55,11 @@ class ClipLevelInfoNCE(VideoClipLoss):
         Returns:
             Dictionary containing loss and additional debug information
         """
-        B, N, E = track_x.shape
+        B, N, _ = track_x.shape
         agg_track_mask = track_mask.all(dim=-1)  # shape: (B, N), True indicates missing
         track_labels = torch.arange(N).to(track_x).unsqueeze(0).repeat(B, 1).long()
         det_labels = torch.arange(N).to(det_x).unsqueeze(0).repeat(B, 1).long()
-        losses = []
+        loss_values = []
         for b_i in range(B):
             # extract non-masked labels
             sub_track_labels = track_labels[b_i][~agg_track_mask[b_i]]
@@ -72,7 +73,7 @@ class ClipLevelInfoNCE(VideoClipLoss):
 
             # Calculate losses
             sub_loss = self._loss_func(sub_embeddings, sub_labels)
-            losses.append(sub_loss)
+            loss_values.append(sub_loss)
 
         # Labels and predictions are still calculated at clip level
         filtered_track_labels_list = []
@@ -95,9 +96,9 @@ class ClipLevelInfoNCE(VideoClipLoss):
                 n_sub_tracks = sub_track_x.shape[0]
                 n_sub_det = sub_det_x.shape[0]
                 if n_sub_tracks > 0 and n_sub_det > 0:
-                    distances = sub_track_x @ sub_det_x.T
-                    sub_track_predictions = sub_track_labels[torch.argmax(distances, dim=1)]
-                    sub_det_predictions = sub_det_labels[torch.argmax(distances, dim=0)]
+                    similarity_scores = sub_track_x @ sub_det_x.T
+                    sub_track_predictions = sub_track_labels[torch.argmax(similarity_scores, dim=1)]
+                    sub_det_predictions = sub_det_labels[torch.argmax(similarity_scores, dim=0)]
 
                     filtered_track_labels_list.append(sub_track_labels)
                     filtered_det_labels_list.append(sub_det_labels)
@@ -109,7 +110,7 @@ class ClipLevelInfoNCE(VideoClipLoss):
         track_predictions = torch_combine(track_predictions_list, dtype=torch.long)
         det_predictions = torch_combine(det_predictions_list, dtype=torch.long)
 
-        loss = torch.stack(losses).mean()
+        loss = torch.stack(loss_values).mean()
         return {
             'loss': loss,
             'track_loss': loss,
@@ -154,7 +155,7 @@ class BatchLevelInfoNCE(VideoClipLoss):
         Returns:
             Dictionary containing loss and additional debug information
         """
-        B, N, E = track_x.shape
+        B, N, _ = track_x.shape
         agg_track_mask = track_mask.all(dim=-1)  # shape: (B, N), True indicates missing
         global_track_labels = torch.arange(B * N).to(track_x).long()
         global_det_labels = torch.arange(B * N).to(det_x).long()
@@ -195,9 +196,9 @@ class BatchLevelInfoNCE(VideoClipLoss):
                 n_sub_tracks = sub_track_x.shape[0]
                 n_sub_det = sub_det_x.shape[0]
                 if n_sub_tracks > 0 and n_sub_det > 0:
-                    distances = sub_track_x @ sub_det_x.T
-                    sub_track_predictions = sub_track_labels[torch.argmax(distances, dim=1)]
-                    sub_det_predictions = sub_det_labels[torch.argmax(distances, dim=0)]
+                    similarity_scores = sub_track_x @ sub_det_x.T
+                    sub_track_predictions = sub_track_labels[torch.argmax(similarity_scores, dim=1)]
+                    sub_det_predictions = sub_det_labels[torch.argmax(similarity_scores, dim=0)]
 
                     filtered_track_labels_list.append(sub_track_labels)
                     filtered_det_labels_list.append(sub_det_labels)
@@ -266,7 +267,7 @@ class IDLevelInfoNCE(VideoClipLoss):
         if track_ids is None or det_ids is None:
             raise ValueError('IDLevelInfoNCE requires track_ids and det_ids.')
 
-        B, N, E = track_x.shape
+        B, N, _ = track_x.shape
         agg_track_mask = track_mask.all(dim=-1)
         agg_track_ids = track_ids.max(dim=-1).values
 
@@ -307,9 +308,9 @@ class IDLevelInfoNCE(VideoClipLoss):
                 n_sub_tracks = sub_track_x.shape[0]
                 n_sub_det = sub_det_x.shape[0]
                 if n_sub_tracks > 0 and n_sub_det > 0:
-                    distances = sub_track_x @ sub_det_x.T
-                    sub_track_predictions = sub_track_labels[torch.argmax(distances, dim=1)]
-                    sub_det_predictions = sub_det_labels[torch.argmax(distances, dim=0)]
+                    similarity_scores = sub_track_x @ sub_det_x.T
+                    sub_track_predictions = sub_track_labels[torch.argmax(similarity_scores, dim=1)]
+                    sub_det_predictions = sub_det_labels[torch.argmax(similarity_scores, dim=0)]
 
                     filtered_track_labels_list.append(sub_track_labels)
                     filtered_det_labels_list.append(sub_det_labels)

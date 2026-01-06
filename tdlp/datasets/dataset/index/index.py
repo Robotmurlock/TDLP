@@ -10,6 +10,7 @@ from tdlp.datasets.common import BasicSceneInfo
 
 @dataclass
 class FrameObjectData:
+    """Per-frame data for a single object."""
     scene: str
     object_id: str
     frame_index: int

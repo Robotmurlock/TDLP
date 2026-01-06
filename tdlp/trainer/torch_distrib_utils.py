@@ -2,13 +2,13 @@
 Torch distribution utils.
 """
 import functools
+from operator import itemgetter
 import os
-from typing import Union, Optional, Callable
+from typing import Callable, Optional, Union
 
-from torch import distributed as dist
+from torch import distributed as dist, nn
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch import nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset, DistributedSampler, Sampler
 from tqdm import tqdm
 
 
@@ -108,10 +108,6 @@ def dist_barrier() -> None:
 """
 DDP Sampler support.
 """
-from operator import itemgetter
-from typing import Optional
-
-from torch.utils.data import DistributedSampler, Dataset, Sampler
 
 
 class DatasetFromSampler(Dataset):

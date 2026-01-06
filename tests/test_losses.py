@@ -1,11 +1,13 @@
+"""Tests for the losses module."""
 import pytest
+import torch
+
 from tdlp.trainer.losses.base import VideoClipLoss
 from tdlp.trainer.losses.infonce import (
     BatchLevelInfoNCE,
     IDLevelInfoNCE,
     MultiFeatureLoss,
 )
-import torch
 
 
 class ConstantLoss(VideoClipLoss):
@@ -61,7 +63,7 @@ def test_multi_feature_loss_combines_losses_with_weights():
 
 
 def test_multi_feature_loss_requires_feature_dicts():
-    track_x, det_x, track_mask, det_mask, feature_dict = _dummy_features()
+    track_x, det_x, track_mask, det_mask, _ = _dummy_features()
     mm_loss = ConstantLoss(0.0)
     per_losses = {"a": ConstantLoss(1.0)}
     loss_fn = MultiFeatureLoss(mm_loss, per_losses)
