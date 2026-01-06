@@ -26,4 +26,4 @@ jobs:
           pip install pylint
       - name: Run pylint
         run: |
-          pylint --fail-under=9.5 mot_jepa tests
+          pylint --fail-under=9.5 tdlp tests
