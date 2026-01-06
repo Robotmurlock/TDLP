@@ -29,11 +29,11 @@ dataset:
       feature_names:
       - bbox
   transform:
-    _target_: mot_jepa.datasets.dataset.transform.ComposeTransform
+    _target_: tdlp.datasets.dataset.transform.ComposeTransform
     transforms:
-    - _target_: mot_jepa.datasets.dataset.transform.BBoxXYWHtoXYXY
-    - _target_: mot_jepa.datasets.dataset.transform.BBoxMinMaxScaling
-    - _target_: mot_jepa.datasets.dataset.transform.FeatureFODStandardization
+    - _target_: tdlp.datasets.dataset.transform.BBoxXYWHtoXYXY
+    - _target_: tdlp.datasets.dataset.transform.BBoxMinMaxScaling
+    - _target_: tdlp.datasets.dataset.transform.FeatureFODStandardization
       coord_mean:
         bbox:
         - 0.5
@@ -80,29 +80,29 @@ dataset:
         - 1.0
       fod_time_scaled: true
   augmentations:
-    _target_: mot_jepa.datasets.dataset.augmentations.base.CompositionAugmentation
+    _target_: tdlp.datasets.dataset.augmentations.base.CompositionAugmentation
     augmentations:
-    - _target_: mot_jepa.datasets.dataset.augmentations.bbox.BBoxGaussianNoiseAugmentation
+    - _target_: tdlp.datasets.dataset.augmentations.bbox.BBoxGaussianNoiseAugmentation
       sigma: 0.05
       proba: 0.4
       unobs_noise: true
-    - _target_: mot_jepa.datasets.dataset.augmentations.bbox.BBoxGaussianNoiseAugmentation
+    - _target_: tdlp.datasets.dataset.augmentations.bbox.BBoxGaussianNoiseAugmentation
       sigma: 0.1
       proba: 0.1
       unobs_noise: true
-    - _target_: mot_jepa.datasets.dataset.augmentations.bbox.BBoxGaussianNoiseAugmentation
+    - _target_: tdlp.datasets.dataset.augmentations.bbox.BBoxGaussianNoiseAugmentation
       sigma: 0.25
       proba: 0.05
       unobs_noise: true
-    - _target_: mot_jepa.datasets.dataset.augmentations.video.PointOcclusionAugmentations
+    - _target_: tdlp.datasets.dataset.augmentations.video.PointOcclusionAugmentations
       drop_ratio: 0.3
-    - _target_: mot_jepa.datasets.dataset.augmentations.video.LeftOrRightOcclusionAugmentations
+    - _target_: tdlp.datasets.dataset.augmentations.video.LeftOrRightOcclusionAugmentations
       drop_ratio: 0.2
-    - _target_: mot_jepa.datasets.dataset.augmentations.video.IdentitySwitchAugmentation
+    - _target_: tdlp.datasets.dataset.augmentations.video.IdentitySwitchAugmentation
       switch_ratio: 0.3
-    - _target_: mot_jepa.datasets.dataset.augmentations.appearance.AppearanceNoiseAugmentation
+    - _target_: tdlp.datasets.dataset.augmentations.appearance.AppearanceNoiseAugmentation
       alpha: 0.4
-    - _target_: mot_jepa.datasets.dataset.augmentations.video.SmartIdentitySwitchAugmentation
+    - _target_: tdlp.datasets.dataset.augmentations.video.SmartIdentitySwitchAugmentation
       switch_ratio: 0.5
       iou_threshold: 0.5
       max_switch_ratio: 0.5
@@ -111,7 +111,7 @@ dataset:
 train:
   max_epochs: 20
   loss_config:
-    _target_: mot_jepa.trainer.losses.bce.ClipLevelBCE
+    _target_: tdlp.trainer.losses.bce.ClipLevelBCE
     pos_weight: 10.0
     assoc_threshold: 0.01
   optimizer_config:
@@ -119,7 +119,7 @@ train:
     lr: 5.0e-05
     weight_decay: 0.01
   scheduler_config:
-    _target_: mot_jepa.trainer.scheduler.create_warmup_cosine_annealing_scheduler
+    _target_: tdlp.trainer.scheduler.create_warmup_cosine_annealing_scheduler
     n_warmup_epochs: 2
   gradient_clip: 1.0
   mixed_precision: true
@@ -129,7 +129,7 @@ train:
     metric_monitor: val-epoch/loss
     resume_from: null
 model_config:
-  _target_: mot_jepa.architectures.tdcp.core.build_mm_tdsp_model
+  _target_: tdlp.architectures.tdlp.core.build_mm_tdsp_model
   mm_dim: 1024
   similarity_prediction_head_hidden_dim: 512
   sph_common_params:
@@ -174,6 +174,10 @@ eval:
     sim_threshold: 0.95
     initialization_threshold: 1
     new_tracklet_detection_threshold: 0.9
+  demo:
+    video_path: /work/input.mp4
+    output_path: /work/output.mp4
+    fps: 25
   split: val
   checkpoint: null
   visualize: false

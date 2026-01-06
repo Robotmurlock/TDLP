@@ -175,6 +175,13 @@ class EvalPostprocessConfig:
 
 
 @dataclass
+class EvalDemoConfig:
+    video_path: str
+    output_path: str
+    fps: int = 30
+
+
+@dataclass
 class EvalConfig:
     object_detection: EvalObjectDetectionConfig
     tracker: Optional[EvalTrackerConfig] = None
@@ -183,6 +190,9 @@ class EvalConfig:
     visualize: bool = False
     postprocess_enable: bool = True
     postprocess: EvalPostprocessConfig = field(default_factory=EvalPostprocessConfig)
+    run_object_detection: bool = False  # Only relevant for offline tracking
+
+    demo: Optional[EvalDemoConfig] = None
 
 
 @dataclass

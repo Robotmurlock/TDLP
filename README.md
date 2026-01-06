@@ -7,10 +7,15 @@ Official implementation of the paper [Learning Association via Track–Detection
 
 Multi-object tracking aims to maintain object identities over time by associating detections across video frames. Two dominant paradigms exist in literature: tracking-by-detection methods, which are computationally efficient but rely on handcrafted association heuristics, and end-to-end approaches, which learn association from data at the cost of higher computational complexity. We propose Track–Detection Link Prediction (TDLP), a tracking-by-detection method that performs per-frame association via link prediction between tracks and detections, i.e., by predicting the correct continuation of each track at every frame. TDLP is architecturally designed primarily for geometric features such as bounding boxes, while optionally incorporating additional cues, including pose and appearance. Unlike heuristic-based methods, TDLP learns association directly from data without handcrafted rules, while remaining modular and computationally efficient compared to end-to-end trackers. Extensive experiments on multiple benchmarks demonstrate that TDLP consistently surpasses state-of-the-art performance across both tracking-by-detection and end-to-end methods. Finally, we provide a detailed analysis comparing link prediction with metric learning–based association and show that link prediction is more effective, particularly when handling heterogeneous features such as detection bounding boxes.
 
+<p align="center">
+  <img src="https://github.com/Robotmurlock/TDLP/blob/main/assets/dancetrack0097_bboxes.gif" width="45%" />
+  <img src="https://github.com/Robotmurlock/TDLP/blob/main/assets/v_dw7LOz17Omg_c067.gif" width="45%" />
+</p>
+
 ## Repository Layout
 - `configs/` – Hydra defaults, dataset/model/train/eval presets, path config.
 - `tdlp/` – Core library (architectures, datasets, trainer, utils, config parser).
-- `tools/` – Entry points: `train.py`, `inference.py`, analysis scripts.
+- `tools/` – Entry points: `train.py`, `inference.py`, `demo.py`, and analysis scripts.
 - `history/` – Saved experiment settings for reproducibility.
 - `requirements.txt`, `pyproject.toml` – Python package definitions.
 
@@ -41,12 +46,15 @@ Use `tools/inference.py` to generate tracker outputs with trained models and det
 python tools/inference.py --config-name=<name>
 ```
 
+Use `tools/demo.py` to visualize online tracker outputs. Example: `history/DanceTrack/tdlp_bboxes.yaml`.
+```bash
+python tools/demo.py --config-name=<name>
+```
+
 ## Evaluation
 
 Use [TrackEval](https://github.com/JonathonLuiten/TrackEval) in order to evaluate tracker performance. You
 can also use the [forked](https://github.com/Robotmurlock/TrackEval) repo with fixed minor numpy errors.
-
-## Results
 
 | Dataset    | Method     | OD         | HOTA | Weights |
 |:-----------|:-----------|:----------:|:----:|:--------|
@@ -64,16 +72,15 @@ Notes:
 - TDLP-bbox only used object detection outputs as input features for association while TDLP additionally exploits appearance and human pose points features.
 - All checkpoints can be found [here](https://drive.google.com/drive/folders/1ZT7iofkbHzl6_8HU7WsVtuITiIbq_ABU?usp=sharing)
 
-
 ## TODO
 
-- [x] Publish configs, 
-- [x] Publish model checkpoints.
-- [ ] Refactor code (move tracker).
-- [ ] Add online inference support.
-- [ ] Remove YOLOX dependency.
+- [x] Publish the configs, 
+- [x] Publish the model checkpoints.
+- [x] Refactor the code (move tracker).
+- [x] Add online inference support.
+- [ ] Remove the YOLOX dependency.
 - [ ] Add Ultralytics YOLO support.
-- [ ] Create package.
+- [ ] Create a package.
 
 ## Citation
 
