@@ -1,11 +1,12 @@
+# TDCP, mem=50
 defaults:
   - the_global_config
   - _self_
 
-experiment_name: exp01a-FromDanceTrackExp111
+experiment_name: exp11b-fromExp10-TDCPBBoxOnlyXYW
 dataset_name: SportsMOT
 resources:
-  batch_size: 16
+  batch_size: 32
   accelerator: cuda:0
   num_workers: 20
   val_batch_size: 16
@@ -16,7 +17,7 @@ dataset:
       paths:
       - /media/home/SportsMOT/sportsmot_publish/dataset
     sequence_list: null
-  n_tracks: 40
+  n_tracks: 25
   clip_length: 50
   min_clip_tracks: 1
   clip_sampling_step: 1
@@ -27,9 +28,7 @@ dataset:
       prediction_path: /media/home/cameltrack-states/extracted-features-sportsmot
       extra_false_positives: true
       feature_names:
-      - appearance
-      random_appearance_jitter_ratio: 0.0
-      random_appearance_jitter_range: 0
+      - bbox
   transform:
     _target_: mot_jepa.datasets.dataset.transform.ComposeTransform
     transforms:
@@ -113,9 +112,7 @@ dataset:
 train:
   max_epochs: 20
   loss_config:
-    _target_: mot_jepa.trainer.losses.bce.ClipLevelBCE
-    pos_weight: 10.0
-    assoc_threshold: 0.01
+    _target_: mot_jepa.trainer.losses.infonce.ClipLevelInfoNCE
   optimizer_config:
     _target_: torch.optim.AdamW
     lr: 5.0e-05
@@ -131,35 +128,24 @@ train:
     metric_monitor: val-epoch/loss
     resume_from: null
 model_config:
-  _target_: mot_jepa.architectures.tdcp.core.build_mm_tdsp_model
+  _target_: mot_jepa.architectures.tdcp.core.build_mm_tdcp_model
   mm_dim: 1024
-  similarity_prediction_head_hidden_dim: 512
-  sph_common_params:
-    hidden_dim: 512
-  sph_per_feature_params:
-    appearance:
-      hidden_dim: 512
   common_params:
     hidden_dim: 256
     dropout: 0.1
     track_encoder_n_heads: 8
-    track_encoder_n_layers: 4
+    track_encoder_n_layers: 2
     track_encoder_ffn_dim: 512
     projector_intermediate_dim: 512
-    interaction_encoder_enable: true
+    interaction_encoder_enable: false
     interaction_encoder_n_heads: 8
-    interaction_encoder_n_layers: 4
+    interaction_encoder_n_layers: 2
     interaction_encoder_ffn_dim: 512
   per_feature_params:
-    appearance:
-      hidden_dim: 512
-      feature_encoder_type: parts_appearance
+    bbox:
+      feature_encoder_type: motion
       feature_encoder_params:
-        emb_size: 128
-        hidden_dim: 512
-      track_encoder_enable_motion_encoder: false
-      track_encoder_ffn_dim: 1024
-      interaction_encoder_ffn_dim: 1024
+        input_dim: 5
   aggregator_type: sum
   aggregator_params: {}
 path:
@@ -177,13 +163,17 @@ eval:
     oracle: false
   tracker:
     remember_threshold: 50
-    detection_threshold: 0.50
-    sim_threshold: 0.95
+    detection_threshold: 0.1
+    new_tracklet_detection_threshold: 0.4
     initialization_threshold: 1
-    new_tracklet_detection_threshold: 0.55
+    sim_threshold: 0.95
   split: val
   checkpoint: null
   visualize: false
   postprocess_enable: true
+  postprocess:
+    init_threshold: 1
+    linear_interpolation_threshold: 30
+    linear_interpolation_min_tracklet_length: 30
+    min_tracklet_length: 0
 analysis: null
-

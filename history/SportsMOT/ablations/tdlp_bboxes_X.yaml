@@ -2,10 +2,10 @@ defaults:
   - the_global_config
   - _self_
 
-experiment_name: exp01b-FromDanceTrackExp111
+experiment_name: exp13b-fromExp04-TDSPBBoxOnlyX
 dataset_name: SportsMOT
 resources:
-  batch_size: 32
+  batch_size: 4
   accelerator: cuda:0
   num_workers: 20
   val_batch_size: 16
@@ -16,8 +16,8 @@ dataset:
       paths:
       - /media/home/SportsMOT/sportsmot_publish/dataset
     sequence_list: null
-  n_tracks: 40
-  clip_length: 50
+  n_tracks: 25
+  clip_length: 150
   min_clip_tracks: 1
   clip_sampling_step: 1
   val_clip_sampling_step: 1
@@ -162,21 +162,25 @@ eval:
     type: yolox
     params:
       accelerator: cuda:0
-      conf: 0.1
+      conf: 0.6
       min_bbox_area: 100
-      # Model source: https://github.com/ifzhang/ByteTrack, ByteTrack_ablation
-      model_path: /media/home/models/detection/sportsmot.pth.tar
-    lookup_path: /media/home/models/detection/sportsmot.lookup.json
+      model_path: /media/home/DanceTrack-orig/.other/bytetrack_models/bytetrack_model.pth.tar
+    lookup_path: /media/home/DanceTrack-orig/.other/.lookup.json
+    cache_path: /workspace/motrack/dancetrack_yolox
     oracle: false
-    cache_path: '/workspace/motrack/sportsmot_yolox'  # Inference on the second run is 10-20 times faster
   tracker:
-    remember_threshold: 50
+    remember_threshold: 150
     detection_threshold: 0.1
     new_tracklet_detection_threshold: 0.4
     initialization_threshold: 1
-    sim_threshold: 0.95
+    sim_threshold: 0.99
   split: val
   checkpoint: null
   visualize: false
   postprocess_enable: true
+  postprocess:
+    init_threshold: 1
+    linear_interpolation_threshold: 30
+    linear_interpolation_min_tracklet_length: 30
+    min_tracklet_length: 0
 analysis: null

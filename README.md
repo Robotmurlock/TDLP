@@ -46,8 +46,29 @@ python tools/inference.py --config-name=<name>
 Use [TrackEval](https://github.com/JonathonLuiten/TrackEval) in order to evaluate tracker performance. You
 can also use the [forked](https://github.com/Robotmurlock/TrackEval) repo with fixed minor numpy errors.
 
+## Results
+
+| Dataset    | Method     | OD         | HOTA | Weights |
+|:-----------|:-----------|:----------:|:----:|:--------|
+| DanceTrack | TDLP-bbox  | [DanceTrack](https://github.com/DanceTrack/DanceTrack) | 67.8 | [tdlp_dancetrack_bboxes.pt](https://drive.google.com/file/d/17OoRFR-vdxAbnN9v7moQ4ICr4yfPG0P5/view?usp=drive_link) |
+| DanceTrack | TDLP       | [DanceTrack](https://github.com/DanceTrack/DanceTrack) | 70.1 | [tdlp_dancetrack.pt](https://drive.google.com/file/d/1JltyjvIqOy64xE87u1eoTauKbxOAMAN0/view?usp=drive_link) |
+| SportsMOT  | TDLP-bbox  | [SportsMOT](https://github.com/MCG-NJU/SportsMOT)  | 74.8 | [tdlp_sportsmot_bboxes.pt](https://drive.google.com/file/d/1XHh3ZJYBmqHUL2pQIRCpZ4VaK42llv5m/view?usp=drive_link) |
+| SportsMOT  | TDLP       | [SportsMOT](https://github.com/MCG-NJU/SportsMOT)  | 81.9 | [tdlp_sportsmot.pt](https://drive.google.com/file/d/1__3W_Tm5yqcFrRhx1vebZXWceBe7OBLR/view?usp=drive_link) |
+| BEE24      | TDLP-bbox  | [TOPICTrack](https://github.com/holmescao/TOPICTrack) | 51.9 | [tdlp_bee24_bboxes.pt](https://drive.google.com/file/d/1jBeiuKTkoyM10SOVmApYu7BaJR4rRLOO/view?usp=drive_link) |
+| MOT17      | TDLP       | [ByteTrack](https://github.com/FoundationVision/ByteTrack)  | 60.6 | [tdlp_mot17.pt](https://drive.google.com/file/d/1prWA9wk5ZAkfgsVgYFTH3ftvTNg61ZB3/view?usp=drive_link) |
+| SportsMOT  | TDLP-bbox  | [SportsMOT](https://github.com/MCG-NJU/SportsMOT)  | 52.2 | [tdlp_sportsmot_bboxes.pt](https://drive.google.com/file/d/1XHh3ZJYBmqHUL2pQIRCpZ4VaK42llv5m/view?usp=drive_link) |
+| SportsMOT  | TDLP       | [SportsMOT](https://github.com/MCG-NJU/SportsMOT)  | 56.3 | [tdlp_sportsmot.pt](https://drive.google.com/file/d/1__3W_Tm5yqcFrRhx1vebZXWceBe7OBLR/view?usp=drive_link) |
+
+Notes:
+- OD: Object Detection model and weights.
+- TDLP-bbox only used object detection outputs as input features for association while TDLP additionally exploits appearance and human pose points features.
+- All checkpoints can be found [here](https://drive.google.com/drive/folders/1ZT7iofkbHzl6_8HU7WsVtuITiIbq_ABU?usp=sharing)
+
+
 ## TODO
-- [ ] Publish configs, models and checkpoints.
+
+- [x] Publish configs, 
+- [x] Publish model checkpoints.
 - [ ] Refactor code (move tracker).
 - [ ] Add online inference support.
 - [ ] Remove YOLOX dependency.
