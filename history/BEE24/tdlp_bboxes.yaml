@@ -184,3 +184,7 @@ eval:
   checkpoint: null
   visualize: true
 analysis: null
+
+hf:
+  username: Robotmurlock
+  model_name: tdlp_bee24_bboxes

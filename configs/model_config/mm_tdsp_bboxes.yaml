@@ -1,4 +1,4 @@
-_target_: mot_jepa.architectures.tdcp.core.build_mm_tdsp_model
+_target_: tdlp.architectures.tdlp.core.build_mm_tdsp_model
 mm_dim: 1024
 similarity_prediction_head_hidden_dim: 512
 

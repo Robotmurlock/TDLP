@@ -1,8 +1,8 @@
-_target_: mot_jepa.datasets.dataset.transform.ComposeTransform
+_target_: tdlp.datasets.dataset.transform.ComposeTransform
 transforms:
-  - _target_: mot_jepa.datasets.dataset.transform.BBoxXYWHtoXYXY
-  - _target_: mot_jepa.datasets.dataset.transform.BBoxMinMaxScaling
-  - _target_: mot_jepa.datasets.dataset.transform.FeatureFODStandardization
+  - _target_: tdlp.datasets.dataset.transform.BBoxXYWHtoXYXY
+  - _target_: tdlp.datasets.dataset.transform.BBoxMinMaxScaling
+  - _target_: tdlp.datasets.dataset.transform.FeatureFODStandardization
     coord_mean:
       bbox: [0.5, 0.5, 0.5, 0.5, 0.5]
     coord_std:

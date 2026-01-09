@@ -1,26 +1,26 @@
-_target_: mot_jepa.datasets.dataset.augmentations.base.CompositionAugmentation
+_target_: tdlp.datasets.dataset.augmentations.base.CompositionAugmentation
 augmentations:
-  - _target_: mot_jepa.datasets.dataset.augmentations.bbox.BBoxGaussianNoiseAugmentation
+  - _target_: tdlp.datasets.dataset.augmentations.bbox.BBoxGaussianNoiseAugmentation
     sigma: 0.05
     proba: 0.40
     unobs_noise: True
-  - _target_: mot_jepa.datasets.dataset.augmentations.bbox.BBoxGaussianNoiseAugmentation
+  - _target_: tdlp.datasets.dataset.augmentations.bbox.BBoxGaussianNoiseAugmentation
     sigma: 0.10
     proba: 0.10
     unobs_noise: True
-  - _target_: mot_jepa.datasets.dataset.augmentations.bbox.BBoxGaussianNoiseAugmentation
+  - _target_: tdlp.datasets.dataset.augmentations.bbox.BBoxGaussianNoiseAugmentation
     sigma: 0.25
     proba: 0.05
     unobs_noise: True
-  - _target_: mot_jepa.datasets.dataset.augmentations.video.PointOcclusionAugmentations
+  - _target_: tdlp.datasets.dataset.augmentations.video.PointOcclusionAugmentations
     drop_ratio: 0.3
-  - _target_: mot_jepa.datasets.dataset.augmentations.video.LeftOrRightOcclusionAugmentations
+  - _target_: tdlp.datasets.dataset.augmentations.video.LeftOrRightOcclusionAugmentations
     drop_ratio: 0.2
-  # - _target_: mot_jepa.datasets.dataset.augmentations.video.IdentitySwitchAugmentation
-  #   switch_ratio: 0.3
-  - _target_: mot_jepa.datasets.dataset.augmentations.appearance.AppearanceNoiseAugmentation
+  - _target_: tdlp.datasets.dataset.augmentations.video.IdentitySwitchAugmentation
+    switch_ratio: 0.3
+  - _target_: tdlp.datasets.dataset.augmentations.appearance.AppearanceNoiseAugmentation
     alpha: 0.40
-  - _target_: mot_jepa.datasets.dataset.augmentations.video.SmartIdentitySwitchAugmentation
+  - _target_: tdlp.datasets.dataset.augmentations.video.SmartIdentitySwitchAugmentation
     switch_ratio: 0.5
     iou_threshold: 0.5
     max_switch_ratio: 0.5

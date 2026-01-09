@@ -3,4 +3,4 @@ defaults:
   - _self_
 
 loss_config:
-  _target_: mot_jepa.trainer.losses.infonce.IDLevelInfoNCE
+  _target_: tdlp.trainer.losses.infonce.IDLevelInfoNCE

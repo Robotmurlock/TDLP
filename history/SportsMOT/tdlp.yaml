@@ -208,3 +208,7 @@ eval:
   visualize: false
   postprocess_enable: true
 analysis: null
+
+hf:
+  username: Robotmurlock
+  model_name: tdlp_sportsmot

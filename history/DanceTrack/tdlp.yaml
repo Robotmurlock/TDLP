@@ -208,3 +208,7 @@ eval:
   visualize: false
   postprocess_enable: false
 analysis: null
+
+hf:
+  username: Robotmurlock
+  model_name: tdlp_dancetrack

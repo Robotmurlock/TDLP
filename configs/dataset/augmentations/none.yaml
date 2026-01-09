@@ -1,1 +1,1 @@
-_target_: mot_jepa.datasets.dataset.augmentations.base.IdentityAugmentation
+_target_: tdlp.datasets.dataset.augmentations.base.IdentityAugmentation

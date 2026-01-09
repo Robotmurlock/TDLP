@@ -4,10 +4,12 @@ Config structure. Config should be loaded as dictionary and parsed into GlobalCo
 - Custom validations
 - Python IDE autocomplete
 """
-import logging
+import copy
 from dataclasses import field
-from typing import Optional, List, Iterator
+import logging
+from typing import Any, Dict, Iterator, List, Optional
 
+from huggingface_hub import PyTorchModelHubMixin
 from hydra.core.config_store import ConfigStore
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
@@ -17,10 +19,11 @@ from torch.optim.lr_scheduler import LRScheduler
 from torch.optim.optimizer import Optimizer
 from torch.utils.data import Sampler
 
-from tdlp.common import project, conventions
+from tdlp.architectures.huggingface.tdlp import HF_MODEL_IMPORT_ALIASES
+from tdlp.common import conventions, project
 from tdlp.datasets.dataset import DatasetIndex, MOTClipDataset
 from tdlp.datasets.dataset.augmentations import Augmentation, IdentityAugmentation
-from tdlp.datasets.dataset.transform import Transform, IdentityTransform
+from tdlp.datasets.dataset.transform import IdentityTransform, Transform
 
 logger = logging.getLogger('ConfigParser')
 
@@ -217,6 +220,22 @@ class PathConfig:
 
 
 @dataclass
+class HuggingFaceConfig:
+    username: str
+    model_name: str
+
+    @property
+    def model_path(self) -> str:
+        """
+        Get the model path.
+
+        Returns:
+            The model path.
+        """
+        return f"{self.username}/{self.model_name}"
+
+
+@dataclass
 class GlobalConfig:
     """
     Scripts GlobalConfig
@@ -233,15 +252,39 @@ class GlobalConfig:
     eval: Optional[EvalConfig] = None
     analysis: Optional[dict] = None
 
+    hf: Optional[HuggingFaceConfig] = None
+
     def __post_init__(self):
         if self.eval.checkpoint is None:
             experiment_path = conventions.get_experiment_path(self.path.master, self.dataset_name, self.experiment_name)
             self.eval.checkpoint = conventions.get_latest_checkpoint_path(experiment_path)
 
-    def build_model(self):
+    def build_model(self) -> nn.Module:
         return instantiate(
             OmegaConf.create(self.model_config),
         )
+
+    def build_hf_model(self) -> PyTorchModelHubMixin:
+        model_config = self.get_hf_model_params(with_target=True)
+        return instantiate(OmegaConf.create(model_config))
+
+    def get_hf_model_params(self, with_target: bool = False) -> Dict[str, Any]:
+        """Get the model parameters.
+
+        Args:
+            with_target: Whether to include the target in the parameters.
+
+        Returns:
+            The model parameters.
+        """
+        model_params = copy.deepcopy(self.model_config)
+        if not with_target:
+            model_params.pop('_target_')
+        else:
+            model_params['_target_'] = HF_MODEL_IMPORT_ALIASES[model_params['_target_']]
+        if "per_feature_checkpoint" in model_params:
+            model_params.pop("per_feature_checkpoint")  # Not needed if final checkpoint is available
+        return model_params
 
 
 # Configuring hydra config store

@@ -6,6 +6,7 @@ defaults:
   - eval: default.yaml
   - model_config: mm_tdsp_bboxes.yaml
   - path: default.yaml
+  - hf: default.yaml
 
 experiment_name: exp04b-fromExp03-Mem150
 dataset_name: SportsMOT

@@ -6,6 +6,7 @@ defaults:
   - eval: default.yaml
   - model_config: mm_tdsp_bboxes_keypoints_appearance.yaml
   - path: default.yaml
+  - hf: default.yaml
 
 experiment_name: exp04-fromExp03-Mem150
 dataset_name: SportsMOT

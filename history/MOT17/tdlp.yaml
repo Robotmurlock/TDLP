@@ -213,3 +213,7 @@ eval:
   checkpoint: null
   visualize: false
 analysis: null
+
+hf:
+  username: Robotmurlock
+  model_name: mot17_tdlp
