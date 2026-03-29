@@ -20,9 +20,10 @@ Multi-object tracking aims to maintain object identities over time by associatin
 - `requirements.txt`, `pyproject.toml` – Python package definitions.
 
 ## Requirements
-- Python 3.12+.
-- [uv](https://docs.astral.sh/uv/) for training.
-- YOLOX for inference (`TODO`: remove this dependency).
+- Python 3.11.
+- [uv](https://docs.astral.sh/uv/) for dependency management.
+- mmdetection for object detection inference (installed via uv).
+- For legacy YOLOX support, see `docker/Dockerfile.yolox`.
 
 ## Training
 
@@ -39,11 +40,9 @@ Outputs (checkpoints, TensorBoard logs, metrics) are written under `path.master/
 
 ## Inference
 
-**Note:** At the moment, due to YOLOX and uv incompatibility, you need to clone the YOLOX repo and create a separate Python virtual environment with the required packages to run inference.
-
 Use `tools/inference.py` to generate tracker outputs with trained models and detector features:
 ```bash
-python tools/inference.py --config-name=<name>
+uv run tools/inference.py --config-name=<name>
 ```
 
 Use `tools/demo.py` to visualize online tracker outputs. Example: `history/DanceTrack/tdlp_bboxes.yaml`.
@@ -78,7 +77,7 @@ Notes:
 - [x] Publish the model checkpoints.
 - [x] Refactor the code (move tracker).
 - [x] Add online inference support.
-- [ ] Remove the YOLOX dependency.
+- [x] Remove the YOLOX dependency (replaced with mmdetection).
 - [ ] Add Ultralytics YOLO support.
 - [ ] Create a package.
 
