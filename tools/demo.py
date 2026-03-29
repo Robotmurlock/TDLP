@@ -2,8 +2,6 @@
 import json
 import logging
 
-from tqdm import tqdm
-
 import hydra
 from motrack.library.cv.video_reader import MP4Reader
 from motrack.library.cv.video_writer import MP4Writer
@@ -11,11 +9,14 @@ from motrack.object_detection.factory import object_detection_inference_factory
 from motrack.tools.visualize import draw_tracklet
 from motrack.tracker.tracklet import TrackletState
 from motrack.utils.lookup import LookupTable
+import torch
+from tqdm import tqdm
+
 from tdlp.common.project import CONFIGS_PATH
 from tdlp.config_parser import GlobalConfig
+import tdlp.object_detection
 from tdlp.tracker import TDLPOnlineTracker
 from tdlp.utils import pipeline
-import torch
 
 
 logger = logging.getLogger('OnlineInference')

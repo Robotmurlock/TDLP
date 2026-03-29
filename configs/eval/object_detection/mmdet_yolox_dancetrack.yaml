@@ -1,0 +1,13 @@
+type: 'mmdet_yolox'
+params:
+  accelerator: cuda:0
+  conf: 0.1
+  min_bbox_area: 100
+  # mmdetection config matching ByteTrack YOLOX-X architecture
+  model_config: /work/configs/mmdet/yolox_x_bytetrack.py
+  # Model source: https://github.com/ifzhang/ByteTrack, ByteTrack_ablation
+  model_path: /media/home/DanceTrack-orig/.other/bytetrack_models/bytetrack_model.pth.tar
+  bytetrack_compat: true
+lookup_path: /media/home/DanceTrack-orig/.other/.lookup.json
+oracle: false
+cache_path: '/workspace/motrack/dancetrack_mmdet_yolox_low_conf'  # Inference on the second run is 10-20 times faster

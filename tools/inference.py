@@ -3,9 +3,6 @@ import json
 import logging
 import time
 
-import numpy as np
-from tqdm import tqdm
-
 import hydra
 from motrack.evaluation.io import TrackerInferenceWriter
 from motrack.object_detection import DetectionManager
@@ -13,15 +10,19 @@ from motrack.tools.postprocess import run_tracker_postprocess
 from motrack.tools.visualize import run_visualize_tracker_inference
 from motrack.tracker.tracklet import TrackletState
 from motrack.utils.lookup import LookupTable
+import numpy as np
+import torch
+from tqdm import tqdm
+
 from tdlp.common import conventions
 from tdlp.common.project import CONFIGS_PATH
 from tdlp.config_parser import GlobalConfig
 from tdlp.datasets.dataset import dataset_index_factory
 from tdlp.datasets.dataset.motrack import MotrackDatasetWrapper
+import tdlp.object_detection
 from tdlp.tracker import TDLPOfflineTracker
 from tdlp.utils import pipeline
 from tdlp.utils.extra_features import ExtraFeaturesReader
-import torch
 
 
 logger = logging.getLogger('OfflineInference')
