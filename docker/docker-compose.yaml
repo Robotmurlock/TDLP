@@ -1,12 +1,64 @@
 # Check docker/Dockerfile
 version: "3.9"
 services:
-  tdcp-env:
-    container_name: ${TRAIN_CONT_NAME:-tdcp-env}
+  tdlp-env:
+    container_name: ${TRAIN_CONT_NAME:-tdlp-env}
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: tdcp-env
+    image: tdlp-env
+    stdin_open: true
+    tty: true
+    command: bash
+
+    shm_size: 16gb
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: [ '${GPU}' ]
+              capabilities: [ gpu ]
+          cpus: '${CPUS:-1.0}'
+
+    volumes:
+      - '/tmp:/tmp'
+      - '${DATA}:/media/home'
+      - '${CODE:-$PWD}:/work'
+      - '${CLAUDE_CONFIG:-~/.claude}:/root/.claude'
+
+  tdlp-env-claude:
+    container_name: ${CLAUDE_CONT_NAME:-tdlp-env-claude}
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.claude
+    image: tdlp-env-claude
+    stdin_open: true
+    tty: true
+    command: bash
+
+    shm_size: 16gb
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: [ '${GPU}' ]
+              capabilities: [ gpu ]
+          cpus: '${CPUS:-1.0}'
+
+    volumes:
+      - '/tmp:/tmp'
+      - '${DATA}:/media/home'
+      - '${CODE:-$PWD}:/work'
+      - '${CLAUDE_CONFIG:-~/.claude}:/root/.claude'
+
+  tdlp-env-yolox:
+    container_name: ${YOLOX_CONT_NAME:-tdlp-env-yolox}
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.yolox
+    image: tdlp-env-yolox
     stdin_open: true
     tty: true
     command: bash
@@ -26,12 +78,12 @@ services:
       - '${DATA}:/media/home'
       - '${CODE:-$PWD}:/work'
 
-  tdcp-tensorboard-dancetrack:
-    container_name: ${TB_CONT_NAME:-tdcp-tensorboard-dancetrack}
+  tdlp-tensorboard-dancetrack:
+    container_name: ${TB_CONT_NAME:-tdlp-tensorboard-dancetrack}
     build:
       context: ..
       dockerfile: docker/tensorboard.Dockerfile
-    image: tdcp-tensorboard
+    image: tdlp-tensorboard
     stdin_open: true
     tty: true
 

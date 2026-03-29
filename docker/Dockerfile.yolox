@@ -1,0 +1,32 @@
+FROM ubuntu:22.04
+
+RUN apt update
+RUN apt-get update && \
+    apt-get install -y \
+    python3 \
+    python3-pip \
+    python3.10-venv \
+    nano \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgl1-mesa-glx unzip \
+    curl cron ffmpeg \
+    ssh openssh-client \
+    vim \
+    git
+
+WORKDIR /work
+ENV PYTHONPATH="/work"
+
+# Install original YOLOX in its own venv
+RUN git clone https://github.com/Megvii-BaseDetection/YOLOX /YOLOX
+WORKDIR /YOLOX
+RUN python3 -m venv venv
+RUN /bin/bash -c "source /YOLOX/venv/bin/activate && pip install -U pip setuptools"
+RUN /bin/bash -c "source /YOLOX/venv/bin/activate && pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cu121"
+RUN /bin/bash -c "source /YOLOX/venv/bin/activate && pip install --no-build-isolation -v -e ."
+
+WORKDIR /work
+
+CMD ["bash"]

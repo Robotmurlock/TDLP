@@ -19,17 +19,15 @@ WORKDIR /work
 ENV PYTHONPATH="/work"
 
 RUN pip install uv
-RUN uv init
+
+# Install project Python environment to /opt/venv so it is not overridden
+# by the ${CODE}:/work volume mount at runtime.
+COPY pyproject.toml uv.lock ./
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 RUN uv sync
 
-RUN apt-get install -y git python3.10-venv
-RUN git clone https://github.com/Megvii-BaseDetection/YOLOX /YOLOX
-WORKDIR /YOLOX
-RUN python3 -m venv venv
-RUN /bin/bash -c "source /YOLOX/venv/bin/activate && pip install -U pip setuptools"
-RUN /bin/bash -c "source /YOLOX/venv/bin/activate && pip install torch torchvision torchaudio"
-RUN /bin/bash -c "source /YOLOX/venv/bin/activate && pip install --no-build-isolation -v -e ."
-
-WORKDIR /work
+# mmcv prebuilt wheel with CUDA support from the OpenMMLab index.
+# Must match the torch+CUDA version installed by uv (torch 2.1 + cu121).
+RUN /opt/venv/bin/pip install "mmcv>=2.0.0,<2.2.0" -f https://download.openmmlab.com/mmcv/dist/cu121/torch2.1.0/index.html
 
 CMD ["bash"]
