@@ -164,7 +164,7 @@ eval:
       accelerator: cuda:0
       conf: 0.6
       min_bbox_area: 100
-      model_config: /work/configs/mmdet/yolox_x_bytetrack.py
+      model_config: /work/configs/od/mmdet/yolox_x_bytetrack.py
       model_path: /media/home/DanceTrack-orig/.other/bytetrack_models/bytetrack_model.pth.tar
       bytetrack_compat: true
     lookup_path: /media/home/DanceTrack-orig/.other/.lookup.json
