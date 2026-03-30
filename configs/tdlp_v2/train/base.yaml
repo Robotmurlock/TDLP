@@ -1,0 +1,18 @@
+max_epochs: 20
+gradient_clip: 1.0
+mixed_precision: true
+resume: false
+truncate: true
+
+checkpoint_cfg:
+  metric_monitor: val-epoch/loss
+  resume_from: null
+
+optimizer_config:
+  _target_: torch.optim.AdamW
+  lr: 5e-5
+  weight_decay: 1e-2
+
+scheduler_config:
+  _target_: tdlp.trainer.scheduler.create_warmup_cosine_annealing_scheduler
+  n_warmup_epochs: 2

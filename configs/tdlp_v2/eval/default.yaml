@@ -1,0 +1,25 @@
+defaults:
+  - object_detection: mmdet_yolox_dancetrack.yaml
+
+split: 'val'
+checkpoint: null
+visualize: false
+postprocess_enable: true
+
+tracker:
+  remember_threshold: 50
+  detection_threshold: 0.40
+  sim_threshold: 0.95
+  initialization_threshold: 1
+  new_tracklet_detection_threshold: 0.90
+
+postprocess:
+  init_threshold: 1
+  linear_interpolation_threshold: 30
+  linear_interpolation_min_tracklet_length: 30
+  min_tracklet_length: 0
+
+demo:
+  video_path: /work/input.mp4
+  output_path: /work/output.mp4
+  fps: 25
