@@ -12,7 +12,7 @@ from tdlp.architectures.tdlp.aggregators import TDCPAggregator, tdcp_aggregator_
 from tdlp.architectures.tdlp.feature_encoders import feature_encoder_factory
 from tdlp.architectures.tdlp.object_interaction_encoder import ObjectInteractionEncoder
 from tdlp.architectures.tdlp.projector import TrackToDetectionProjector
-from tdlp.architectures.tdlp.similarity_prediction import TDSPMLPHead
+from tdlp.architectures.tdlp.similarity_prediction import TDSPMLPHead, similarity_head_factory
 from tdlp.architectures.tdlp.track_encoder import TrackEncoder
 
 logger = logging.getLogger('Architecture')
@@ -404,6 +404,8 @@ def build_tdsp_model(
     interaction_encoder_n_layers: int = 6,
     interaction_encoder_ffn_dim: int = 512,
     similarity_prediction_head_hidden_dim: int = 256,
+    similarity_head_type: str = 'mlp',
+    similarity_head_params: Optional[Dict[str, Any]] = None,
 ) -> TrackDetectionSimilarityPrediction:
     """Build a TDSP model with default components.
 
@@ -422,7 +424,8 @@ def build_tdsp_model(
         interaction_encoder_n_layers: Layers in the interaction encoder.
         interaction_encoder_ffn_dim: Feed-forward dimension for the interaction encoder.
         similarity_prediction_head_hidden_dim: Hidden dimension of the similarity prediction head.
-        tdcps_prefix: Prefix for the TDCP models.
+        similarity_head_type: Type of similarity head ('mlp' or 'compact_mlp').
+        similarity_head_params: Additional parameters for the similarity head.
 
     Returns:
         Instantiated :class:`TrackDetectionSimilarityPrediction` model.
@@ -442,9 +445,11 @@ def build_tdsp_model(
         interaction_encoder_n_layers=interaction_encoder_n_layers,
         interaction_encoder_ffn_dim=interaction_encoder_ffn_dim,
     )
-    similarity_prediction_head = TDSPMLPHead(
+    similarity_prediction_head = similarity_head_factory(
+        similarity_head_type,
         input_dim=hidden_dim,
         hidden_dim=similarity_prediction_head_hidden_dim,
+        **(similarity_head_params or {}),
     )
     return TrackDetectionSimilarityPrediction(
         tdcp=tdcp,
@@ -461,6 +466,8 @@ def build_mm_tdsp_model(
     aggregator_type: str,
     aggregator_params: Dict[str, Any],
     similarity_prediction_head_hidden_dim: int = 256,
+    similarity_head_type: str = 'mlp',
+    similarity_head_params: Optional[Dict[str, Any]] = None,
     object_interaction_encoder_enable: bool = False,
     object_interaction_encoder_params: Optional[Dict[str, Any]] = None,
     per_feature_checkpoint: Optional[Dict[str, str]] = None,
@@ -478,6 +485,8 @@ def build_mm_tdsp_model(
         aggregator_type: Type of the aggregator.
         aggregator_params: Aggregator parameters.
         similarity_prediction_head_hidden_dim: Hidden dimension of the similarity prediction head.
+        similarity_head_type: Type of similarity head ('mlp' or 'compact_mlp').
+        similarity_head_params: Additional parameters for the similarity head.
         object_interaction_encoder_enable: Whether to include the object interaction encoder.
         object_interaction_encoder_params: Object interaction encoder parameters.
         per_feature_checkpoint: Per-feature checkpoint.
@@ -487,6 +496,8 @@ def build_mm_tdsp_model(
     Returns:
         Instantiated :class:`MultiModalTDSP` model.
     """
+    extra_sph_params = similarity_head_params or {}
+
     mm_tdcp = build_mm_tdcp_model(
         per_feature_params=per_feature_params,
         common_params=common_params,
@@ -499,12 +510,14 @@ def build_mm_tdsp_model(
         tdcps_prefix=tdcps_prefix,
         mm_linear_layers_prefix=tdcp_mm_linear_layers_prefix
     )
-    sphs: Dict[str, TDSPMLPHead] = {}
+    sphs: Dict[str, nn.Module] = {}
     for feature_name in sph_per_feature_params:
         params = tdcp_utils.merge_configs(sph_common_params, sph_per_feature_params[feature_name])
-        sphs[feature_name] = TDSPMLPHead(
+        sphs[feature_name] = similarity_head_factory(
+            similarity_head_type,
             input_dim=mm_tdcp.get_tdcp(feature_name).output_dim,
-            **params
+            **params,
+            **extra_sph_params,
         )
     if per_feature_checkpoint is not None:
         for key in per_feature_checkpoint:
@@ -517,9 +530,11 @@ def build_mm_tdsp_model(
             }
             sphs[key].load_state_dict(state_dict)
 
-    mm_sph = TDSPMLPHead(
+    mm_sph = similarity_head_factory(
+        similarity_head_type,
         input_dim=mm_tdcp.output_dim,
         hidden_dim=similarity_prediction_head_hidden_dim,
+        **extra_sph_params,
     )
     return MultiModalTDSP(
         mm_tdcp=mm_tdcp,
@@ -569,7 +584,7 @@ def run_test_tdsp() -> None:
     det_features = torch.randn(3, 4, 4)
     det_mask = torch.zeros(3, 4, dtype=torch.bool)
     logits = tdsp(track_features, track_mask, det_features, det_mask)
-    expected_shape = (3, 4, 4, 1)
+    expected_shape = (3, 4, 4)
     assert logits.shape == expected_shape, f'Test failed! Expected shape {expected_shape} but got {logits.shape}.'
 
 

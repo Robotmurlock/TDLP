@@ -1,4 +1,6 @@
 """Similarity prediction heads for TDLP."""
+from typing import Optional
+
 from torch import nn
 import torch
 from torch.nn import functional as F
@@ -44,7 +46,7 @@ def create_pair_embedding(
 
 
 class TDSPMLPHead(nn.Module):
-    """MLP head for similarity prediction."""
+    """MLP head for similarity prediction using full pair embeddings [z1, z2, |z1-z2|]."""
 
     def __init__(
         self,
@@ -85,6 +87,78 @@ class TDSPMLPHead(nn.Module):
         return similarity_scores
 
 
+class TDSPCompactMLPHead(nn.Module):
+    """Compact MLP head for similarity prediction.
+
+    Uses only |z1 - z2| as pair embedding (instead of [z1, z2, |z1-z2|])
+    with an optional low-dimensional projection before pair creation.
+    """
+
+    def __init__(
+        self,
+        input_dim: int,
+        hidden_dim: int,
+        proj_dim: Optional[int] = None,
+    ):
+        """
+        Args:
+            input_dim: Dimension of input track/detection embeddings.
+            hidden_dim: Hidden dimension of the MLP.
+            proj_dim: If set, project inputs to this dimension before pair creation.
+                      Reduces pair tensor from (B, N, M, input_dim) to (B, N, M, proj_dim).
+        """
+        super().__init__()
+        self._proj = nn.Linear(input_dim, proj_dim) if proj_dim is not None else None
+        pair_input_dim = proj_dim if proj_dim is not None else input_dim
+        self._mlp = nn.Sequential(
+            nn.Linear(pair_input_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, 1),
+        )
+
+    def forward(
+        self,
+        track_features: torch.Tensor,
+        det_features: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Forward pass for compact similarity prediction.
+
+        Args:
+            track_features: Track embeddings of shape (B, N, E)
+            det_features: Detection embeddings of shape (B, M, E)
+
+        Returns:
+            Similarity scores of shape (B, N, M)
+        """
+        track_features = F.normalize(track_features, dim=-1)
+        det_features = F.normalize(det_features, dim=-1)
+
+        if self._proj is not None:
+            track_features = self._proj(track_features)
+            det_features = self._proj(det_features)
+
+        diff = torch.abs(track_features.unsqueeze(2) - det_features.unsqueeze(1))
+        B, N, M, D = diff.shape
+        scores = self._mlp(diff.view(B * N * M, D)).view(B, N, M)
+        return scores
+
+
+SIMILARITY_HEAD_CATALOG = {
+    'mlp': TDSPMLPHead,
+    'compact_mlp': TDSPCompactMLPHead,
+}
+
+
+def similarity_head_factory(head_type: str, **kwargs) -> nn.Module:
+    """Create a similarity prediction head by type name."""
+    cls = SIMILARITY_HEAD_CATALOG.get(head_type)
+    if cls is None:
+        raise ValueError(f'Unknown similarity head type: {head_type}. Available: {list(SIMILARITY_HEAD_CATALOG.keys())}')
+    return cls(**kwargs)
+
+
 def test_pair_embedding():
     """Test function for pair embedding creation."""
     B, N, M, E = 2, 4, 6, 8
@@ -114,5 +188,33 @@ def test_pair_embedding():
     print(f'Total pair embeddings: {B} × {N} × {M} × {3*E} = {B*N*M*3*E}')
 
 
+def test_compact_mlp_head():
+    """Test compact MLP head with and without projection."""
+    B, N, M, E = 2, 4, 6, 8
+
+    track_features = torch.randn(B, N, E)
+    det_features = torch.randn(B, M, E)
+
+    # Without projection
+    head = TDSPCompactMLPHead(input_dim=E, hidden_dim=64)
+    scores = head(track_features, det_features)
+    assert scores.shape == (B, N, M), f'Expected ({B}, {N}, {M}) but got {scores.shape}'
+    print(f'Compact MLP (no proj): {scores.shape}')
+
+    # With projection
+    head_proj = TDSPCompactMLPHead(input_dim=E, hidden_dim=64, proj_dim=4)
+    scores_proj = head_proj(track_features, det_features)
+    assert scores_proj.shape == (B, N, M), f'Expected ({B}, {N}, {M}) but got {scores_proj.shape}'
+    print(f'Compact MLP (proj_dim=4): {scores_proj.shape}')
+
+    # Factory test
+    head_factory = similarity_head_factory('compact_mlp', input_dim=E, hidden_dim=64, proj_dim=4)
+    scores_factory = head_factory(track_features, det_features)
+    assert scores_factory.shape == (B, N, M)
+    print('Factory test passed')
+
+
 if __name__ == '__main__':
     test_pair_embedding()
+    test_compact_mlp_head()
+
