@@ -157,3 +157,93 @@ Profiles the full tracking association pipeline: data conversion, transforms, de
 - **`transform` is the second bottleneck** at ~7-10%, with `FeatureFODStandardization` containing a Python for-loop over N tracks (when `fod_time_scaled=true`).
 - **`to_device`**, **`postprocess`**, and **`hungarian`** are negligible (<2% combined) for typical N values.
 - The preprocessing overhead (`convert_data` + `transform`) is **purely CPU-bound Python** — optimizing this (e.g., vectorized tensor construction, caching track histories as tensors, moving FOD computation to GPU) would yield larger speedups than further model compression.
+
+## 6. Preprocessing Bottleneck Analysis (CPU profiling, exp04)
+
+### convert_data breakdown
+
+| Component | N=5 | N=10 | N=20 | N=30 | N=50 | N=100 |
+|---|---|---|---|---|---|---|
+| init_observed_tensors | 0.00 (0.2%) | 0.00 (0.1%) | 0.00 (0.0%) | 0.00 (0.0%) | 0.00 (0.0%) | 0.01 (0.0%) |
+| fill_observed_loop | 2.09 (98.8%) | 4.14 (98.5%) | 8.36 (100%) | 12.54 (100%) | 20.70 (96.3%) | 41.54 (100%) |
+| init_fill_unobserved | 0.03 (1.5%) | 0.05 (1.3%) | 0.10 (1.2%) | 0.14 (1.2%) | 0.23 (1.1%) | 0.46 (1.1%) |
+| **full_convert_data** | **2.11** | **4.21** | **8.32** | **12.53** | **21.49** | **41.55** |
+
+`fill_observed_loop` (the nested Python loop over N tracks × T frames calling `set_features`) accounts for ~99% of `convert_data`. Within that loop:
+- **Iteration overhead** (just traversing tracklet history): 0.01-0.10ms — negligible
+- **`set_features` calls**: ~100% of the loop cost. Each call creates a `torch.tensor()` from a Python list and writes it into a pre-allocated tensor via indexed assignment. At N=20, T=50: ~980 calls × 0.005ms/call ≈ 4.7ms estimated, vs 8.3ms actual (the gap is per-call overhead accumulating over many calls).
+
+### Transform breakdown
+
+| Component | N=5 | N=10 | N=20 | N=30 | N=50 | N=100 |
+|---|---|---|---|---|---|---|
+| BBoxXYWHtoXYXY | 0.08 (17.2%) | 0.08 (11.6%) | 0.08 (7.5%) | 0.09 (5.9%) | 0.15 (6.1%) | 0.12 (2.5%) |
+| BBoxMinMaxScaling | 0.24 (51.3%) | 0.19 (25.8%) | 0.23 (20.5%) | 0.23 (15.4%) | 0.32 (13.4%) | 0.39 (8.3%) |
+| FeatureFODStandardization | 0.31 (66.0%) | 0.48 (65.9%) | 0.82 (73.3%) | 1.17 (77.2%) | 2.35 (98.3%) | 4.41 (95.2%) |
+| **full_transform** | **0.47** | **0.73** | **1.12** | **1.51** | **2.39** | **4.64** |
+
+Note: Individual transform percentages exceed 100% because each is measured with its own `deepcopy` overhead (0.07-0.12ms).
+
+- **`FeatureFODStandardization`** dominates the transform cost (66-95%), scaling linearly with N due to a Python for-loop over tracks when `fod_time_scaled=true`.
+- `BBoxXYWHtoXYXY` and `BBoxMinMaxScaling` are ~constant and negligible at large N.
+
+### Root cause summary
+
+The preprocessing bottleneck has a single root cause: **per-element Python loops creating `torch.tensor()` objects**.
+
+| Bottleneck | Cost at N=20 | Cause |
+|---|---|---|
+| `set_features` in `fill_observed_loop` | ~8.3ms | `torch.tensor([...])` called N×T=980 times |
+| `FeatureFODStandardization` | ~0.8ms | Python for-loop over N tracks for time-scaled FOD |
+| Everything else | ~0.2ms | Negligible |
+
+### Optimizations applied
+
+Two optimizations were implemented:
+
+1. **Batch `set_features` per track** (`tdlp/tracker/online.py`): Collect all frame values per track into a list, then make one `torch.tensor()` call per track (N calls) instead of per frame (N×T calls).
+2. **Vectorize FOD computation** (`tdlp/datasets/dataset/transform/bbox.py`): Replace the Python for-loop over N tracks in `FeatureFODStandardization` with batched tensor ops using `expand_as` and masked indexing.
+
+## 7. Association Pipeline After Optimization (N=M, T=50)
+
+### exp04: Small Model (optimized)
+
+| Component | N=5 | N=10 | N=20 | N=30 | N=50 | N=100 |
+|---|---|---|---|---|---|---|
+| convert_data | 0.22 (10.5%) | 0.41 (17.3%) | 0.80 (26.5%) | 1.23 (34.9%) | 2.04 (42.4%) | 4.08 (38.3%) |
+| transform | 0.30 (14.4%) | 0.32 (13.6%) | 0.37 (12.1%) | 0.43 (12.3%) | 0.50 (10.4%) | 0.71 (6.7%) |
+| to_device | 0.12 (5.7%) | 0.13 (5.4%) | 0.13 (4.3%) | 0.14 (3.9%) | 0.15 (3.1%) | 0.16 (1.5%) |
+| model_forward | 1.24 (59.9%) | 1.24 (52.4%) | 1.23 (40.7%) | 1.27 (36.2%) | 1.57 (32.7%) | 2.79 (26.2%) |
+| postprocess | 0.01 (0.7%) | 0.01 (0.5%) | 0.01 (0.4%) | 0.01 (0.4%) | 0.02 (0.3%) | 0.03 (0.3%) |
+| hungarian | 0.01 (0.4%) | 0.01 (0.4%) | 0.02 (0.7%) | 0.07 (2.1%) | 0.25 (5.2%) | 1.43 (13.5%) |
+| **full_association** | **2.07** | **2.36** | **3.03** | **3.52** | **4.82** | **10.65** |
+
+### exp01: Baseline Model (optimized)
+
+| Component | N=5 | N=10 | N=20 | N=30 | N=50 | N=100 |
+|---|---|---|---|---|---|---|
+| convert_data | 0.22 (7.1%) | 0.42 (11.6%) | 0.82 (16.0%) | 1.29 (16.3%) | 2.12 (16.9%) | 4.21 (16.7%) |
+| transform | 0.31 (10.1%) | 0.40 (11.0%) | 0.38 (7.4%) | 0.44 (5.6%) | 0.51 (4.1%) | 0.84 (3.4%) |
+| to_device | 0.12 (3.9%) | 0.14 (3.7%) | 0.13 (2.5%) | 0.13 (1.7%) | 0.14 (1.1%) | 0.19 (0.7%) |
+| model_forward | 1.81 (58.7%) | 2.28 (62.3%) | 3.57 (69.5%) | 5.05 (64.1%) | 8.37 (66.7%) | 18.45 (73.2%) |
+| postprocess | 0.01 (0.4%) | 0.01 (0.3%) | 0.01 (0.3%) | 0.01 (0.2%) | 0.01 (0.1%) | 0.02 (0.1%) |
+| hungarian | 0.01 (0.3%) | 0.01 (0.3%) | 0.02 (0.4%) | 0.08 (1.0%) | 0.24 (1.9%) | 1.50 (5.9%) |
+| **full_association** | **3.09** | **3.65** | **5.14** | **7.88** | **12.55** | **25.19** |
+
+### Before vs After: Association Speedup
+
+| N | exp04 before | exp04 after | exp04 speedup | exp01 before | exp01 after | exp01 speedup |
+|---|---|---|---|---|---|---|
+| 5 | 4.49 | 2.07 | **2.2x** | 6.73 | 3.09 | **2.2x** |
+| 10 | 7.88 | 2.36 | **3.3x** | 8.68 | 3.65 | **2.4x** |
+| 20 | 12.55 | 3.03 | **4.1x** | 14.79 | 5.14 | **2.9x** |
+| 30 | 17.25 | 3.52 | **4.9x** | 20.91 | 7.88 | **2.7x** |
+| 50 | 26.79 | 4.82 | **5.6x** | 36.31 | 12.55 | **2.9x** |
+| 100 | 51.39 | 10.65 | **4.8x** | 69.75 | 25.19 | **2.8x** |
+
+### Observations
+
+- **Model forward is now the dominant cost** for both models at typical N values, accounting for 40-73% of association time (previously 5-27% for exp04).
+- **`convert_data` dropped from 48-82% to 10-42%** of association time thanks to batched tensor creation (one `torch.tensor()` call per track instead of per frame).
+- **`transform` dropped from 7-10% to ~constant 0.3-0.7ms** thanks to vectorized FOD computation.
+- At N=20 (typical DanceTrack), exp04 association is now **3.03ms** (down from 12.55ms), making it feasible for real-time tracking at 30fps (33ms budget).
