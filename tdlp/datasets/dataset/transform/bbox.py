@@ -117,17 +117,14 @@ class FeatureFODStandardization(Transform):
 
             if self._fod_time_scaled:
                 fod = torch.zeros_like(features)
-                ts = data.observed.ts.unsqueeze(-1).repeat(1, 1, features.shape[-1])
-                for n in range(features.shape[0]):
-                    ts_n = ts[n][~mask[n]]
-                    features_n = features[n][~mask[n]]
-                    if features_n.shape[0] == 0:
-                        continue
-
-                    ts_diff = torch.clamp(ts_n[1:, :] - ts_n[:-1, :], min=1)
-                    features_n[1:, :] = (features_n[1:, :] - features_n[:-1, :]) / (ts_diff)
-                    features_n[0, :] = 0
-                    fod[n][~mask[n]] = features_n
+                ts = data.observed.ts.unsqueeze(-1).expand_as(features)
+                # Vectorized: compute diffs between adjacent temporal positions
+                feat_diff = features[:, 1:, :] - features[:, :-1, :]
+                ts_diff = torch.clamp(ts[:, 1:, :] - ts[:, :-1, :], min=1)
+                fod[:, 1:, :] = feat_diff / ts_diff
+                # Zero out masked positions and positions where previous frame was masked
+                fod[mask] = 0
+                fod[:, 1:, :][mask[:, :-1]] = 0
             else:
                 fod = torch.zeros_like(features)
                 fod[:, 1:, :] = features[:, 1:, :] - features[:, :-1, :]
