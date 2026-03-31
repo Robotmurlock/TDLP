@@ -1,10 +1,10 @@
 # TDLP v2 Inference Profiling Report
 
-Config: `history/DanceTrack/tdlp_bboxes_mmdet.yaml` (hidden_dim=512, mm_dim=1024, track_encoder: 4 layers/8 heads/1024 FFN, interaction_encoder: 4 layers/8 heads/1024 FFN, B=1)
-
 ## 1. Component Profiling vs Number of Objects (N=M, T=50)
 
 ### exp01: MLP Similarity Head (baseline)
+
+Config: `configs/tdlp_v2/default.yaml` (hidden_dim=512, mm_dim=1024, track_encoder: 4 layers/8 heads/1024 FFN, interaction_encoder: 4 layers/8 heads/1024 FFN, B=1, 20.8M params)
 
 | Component | N=5 | N=10 | N=20 | N=30 | N=50 | N=100 |
 |---|---|---|---|---|---|---|
@@ -82,3 +82,78 @@ Uses only `|z1-z2|` as pair embedding (instead of `[z1, z2, |z1-z2|]`) with a le
 - **TCN full forward wins at T=150** (11.56 vs 17.74 ms) due to reduced GPU contention from the lighter encoder
 - The crossover point where TCN beats transformer is around T=100-150
 - For DanceTrack (T=50, N~10-30), the 2-layer transformer is the most efficient choice
+
+## 4. exp04: Small Model (hidden_dim=128, mm_dim=256, 2-layer encoders)
+
+Config: `configs/tdlp_v2/exp04.yaml` (hidden_dim=128, mm_dim=256, track_encoder: 2 layers/8 heads/512 FFN, interaction_encoder: 2 layers/8 heads/512 FFN, B=1, 1.0M params)
+
+### Model Component Profiling (N=M, T=50)
+
+| Component | N=5 | N=10 | N=20 | N=30 | N=50 | N=100 |
+|---|---|---|---|---|---|---|
+| feature_encoding | 0.11 (9.5%) | 0.11 (9.6%) | 0.12 (9.7%) | 0.12 (9.8%) | 0.14 (9.4%) | 0.23 (8.3%) |
+| track_encoding | 0.38 (31.6%) | 0.37 (31.8%) | 0.45 (37.8%) | 0.62 (49.4%) | 0.85 (57.4%) | 1.47 (53.4%) |
+| projection | 0.03 (2.7%) | 0.03 (2.8%) | 0.04 (2.9%) | 0.04 (3.0%) | 0.03 (2.3%) | 0.03 (1.2%) |
+| interaction_encoding | 0.33 (27.8%) | 0.33 (28.4%) | 0.32 (26.7%) | 0.34 (27.2%) | 0.33 (22.3%) | 0.32 (11.8%) |
+| mm_linear_agg | 0.01 (1.0%) | 0.01 (1.0%) | 0.01 (1.0%) | 0.01 (1.0%) | 0.01 (0.9%) | 0.01 (0.4%) |
+| mm_similarity_head | 0.09 (8.0%) | 0.09 (7.8%) | 0.09 (7.3%) | 0.10 (8.0%) | 0.17 (11.7%) | 0.51 (18.3%) |
+| pf_similarity_head | 0.10 (8.2%) | 0.09 (7.6%) | 0.09 (7.5%) | 0.09 (7.1%) | 0.13 (8.5%) | 0.35 (12.5%) |
+| **full_forward** | **1.19** | **1.18** | **1.20** | **1.25** | **1.48** | **2.75** |
+
+### exp01 vs exp04: Model Forward Speedup
+
+| N | exp01 (ms) | exp04 (ms) | Speedup |
+|---|---|---|---|
+| 5 | 1.77 | 1.19 | 1.5x |
+| 10 | 2.28 | 1.18 | 1.9x |
+| 20 | 3.57 | 1.20 | 3.0x |
+| 30 | 5.04 | 1.25 | 4.0x |
+| 50 | 8.38 | 1.48 | 5.7x |
+| 100 | 18.48 | 2.75 | 6.7x |
+
+## 5. Association Pipeline Profiling (N=M, T=50)
+
+Profiles the full tracking association pipeline: data conversion, transforms, device transfer, model forward, postprocessing, and Hungarian matching. Uses synthetic tracklets with full clip-length history.
+
+### exp04: Small Model
+
+| Component | N=5 | N=10 | N=20 | N=30 | N=50 | N=100 |
+|---|---|---|---|---|---|---|
+| convert_data | 2.13 (47.6%) | 4.28 (54.3%) | 8.39 (66.8%) | 12.81 (74.3%) | 21.60 (80.6%) | 42.01 (81.8%) |
+| transform | 0.49 (10.8%) | 0.66 (8.3%) | 1.06 (8.5%) | 1.45 (8.4%) | 2.37 (8.8%) | 4.92 (9.6%) |
+| to_device | 0.12 (2.6%) | 0.13 (1.6%) | 0.14 (1.1%) | 0.14 (0.8%) | 0.14 (0.5%) | 0.20 (0.4%) |
+| model_forward | 1.22 (27.1%) | 1.23 (15.6%) | 1.25 (9.9%) | 1.24 (7.2%) | 1.57 (5.8%) | 2.80 (5.4%) |
+| postprocess | 0.01 (0.3%) | 0.01 (0.2%) | 0.01 (0.1%) | 0.01 (0.1%) | 0.02 (0.1%) | 0.03 (0.1%) |
+| hungarian | 0.01 (0.2%) | 0.01 (0.1%) | 0.01 (0.1%) | 0.02 (0.1%) | 0.05 (0.2%) | 0.20 (0.4%) |
+| **full_association** | **4.49** | **7.88** | **12.55** | **17.25** | **26.79** | **51.39** |
+
+### exp01: Baseline Model
+
+| Component | N=5 | N=10 | N=20 | N=30 | N=50 | N=100 |
+|---|---|---|---|---|---|---|
+| convert_data | 2.16 (32.1%) | 4.35 (50.1%) | 8.85 (59.8%) | 13.13 (62.8%) | 21.59 (59.4%) | 42.93 (61.5%) |
+| transform | 0.46 (6.8%) | 0.81 (9.4%) | 1.02 (6.9%) | 1.40 (6.7%) | 2.51 (6.9%) | 4.66 (6.7%) |
+| to_device | 0.12 (1.7%) | 0.12 (1.4%) | 0.13 (0.9%) | 0.14 (0.6%) | 0.15 (0.4%) | 0.17 (0.2%) |
+| model_forward | 1.79 (26.6%) | 2.37 (27.3%) | 3.62 (24.5%) | 5.05 (24.2%) | 8.37 (23.0%) | 18.45 (26.5%) |
+| postprocess | 0.01 (0.2%) | 0.01 (0.2%) | 0.01 (0.1%) | 0.01 (0.1%) | 0.02 (0.0%) | 0.04 (0.1%) |
+| hungarian | 0.01 (0.1%) | 0.01 (0.1%) | 0.02 (0.1%) | 0.08 (0.4%) | 0.25 (0.7%) | 1.63 (2.3%) |
+| **full_association** | **6.73** | **8.68** | **14.79** | **20.91** | **36.31** | **69.75** |
+
+### exp01 vs exp04: Full Association Speedup
+
+| N | exp01 (ms) | exp04 (ms) | Association speedup | Model-only speedup |
+|---|---|---|---|---|
+| 5 | 6.73 | 4.49 | 1.5x | 1.5x |
+| 10 | 8.68 | 7.88 | 1.1x | 1.9x |
+| 20 | 14.79 | 12.55 | 1.2x | 3.0x |
+| 30 | 20.91 | 17.25 | 1.2x | 4.0x |
+| 50 | 36.31 | 26.79 | 1.4x | 5.7x |
+| 100 | 69.75 | 51.39 | 1.4x | 6.7x |
+
+### Observations
+
+- **`convert_data` is the dominant bottleneck**, consuming 48-82% of association time. It scales linearly with N due to Python loops over tracklet histories (`N tracks × T frames` iterations).
+- **Model forward speedup is largely masked** by preprocessing: exp04 achieves 3x model speedup at N=20, but only 1.2x end-to-end association speedup because `convert_data` is identical for both models.
+- **`transform` is the second bottleneck** at ~7-10%, with `FeatureFODStandardization` containing a Python for-loop over N tracks (when `fod_time_scaled=true`).
+- **`to_device`**, **`postprocess`**, and **`hungarian`** are negligible (<2% combined) for typical N values.
+- The preprocessing overhead (`convert_data` + `transform`) is **purely CPU-bound Python** — optimizing this (e.g., vectorized tensor construction, caching track histories as tensors, moving FOD computation to GPU) would yield larger speedups than further model compression.
