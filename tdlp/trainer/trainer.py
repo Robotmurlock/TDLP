@@ -6,7 +6,7 @@ import logging
 import os
 from pathlib import Path
 import time
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
 from torch import distributed as dist
@@ -18,12 +18,7 @@ from torch.optim.lr_scheduler import LRScheduler
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 
-from tdlp.architectures.tdlp.core import (
-    MultiModalTDCP,
-    MultiModalTDSP,
-    TrackDetectionContrastivePrediction,
-    TrackDetectionSimilarityPrediction,
-)
+from tdlp.architectures.tdlp.base import TDLPModel
 from tdlp.common.conventions import LAST_CKPT
 from tdlp.trainer import torch_distrib_utils
 from tdlp.trainer import torch_helper
@@ -249,6 +244,32 @@ class ContrastiveTrainer:
 
         return val_metrics
 
+    def _compute_model_output_and_loss(
+        self,
+        track_x: Any,
+        track_mask: torch.Tensor,
+        track_ids: torch.Tensor,
+        det_x: Any,
+        det_mask: torch.Tensor,
+        det_ids: torch.Tensor
+    ) -> Tuple[Dict[str, torch.Tensor], Any]:
+        """
+        Run model forward pass and compute loss.
+
+        Delegates output-to-loss bridging to the model's ``prepare_loss_inputs`` method
+        (see :class:`~tdlp.architectures.tdlp.base.TDLPModel`).
+
+        Returns:
+            Tuple of (loss_dict, raw_model_output).
+            The raw model output is needed by EndToEndTrainer for association cost computation.
+        """
+        with autocast(enabled=self._mixed_precision):
+            model_output = self._model(track_x, track_mask, det_x, det_mask)
+            unwrapped: TDLPModel = torch_distrib_utils.get_model(self._model)
+            loss_args = unwrapped.prepare_loss_inputs(model_output, track_mask, det_mask, track_ids, det_ids)
+            loss_dict = self._loss_func(*loss_args)
+            return loss_dict, model_output
+
     def _forward_and_loss(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         track_x = data['observed']['features']
         track_mask = data['observed']['mask']
@@ -257,46 +278,10 @@ class ContrastiveTrainer:
         det_mask = data['unobserved']['mask']
         det_ids = data['unobserved']['ids']
 
-        with autocast(enabled=self._mixed_precision):
-            model_output = self._model(track_x, track_mask, det_x, det_mask)
-            # TODO: Refactor
-            if isinstance(self._model, (MultiModalTDCP, TrackDetectionContrastivePrediction)):
-                if isinstance(self._model, MultiModalTDCP):
-                    track_features, det_features, track_feat_dict, det_feat_dict = model_output
-                else:
-                    track_features, det_features = model_output
-                    track_feat_dict = None
-                    det_feat_dict = None
-
-                loss_dict = self._loss_func(
-                    track_features,
-                    det_features,
-                    track_mask,
-                    det_mask,
-                    track_feat_dict,
-                    det_feat_dict,
-                    track_ids,
-                    det_ids
-                )
-            elif isinstance(self._model, (MultiModalTDSP, TrackDetectionSimilarityPrediction)):
-                if isinstance(self._model, MultiModalTDSP):
-                    logits, logits_dict = model_output
-                else:
-                    logits = model_output
-                    logits_dict = None
-
-                loss_dict = self._loss_func(
-                    logits,
-                    track_mask,
-                    det_mask,
-                    track_ids,
-                    det_ids,
-                    logits_dict
-                )
-            else:
-                raise TypeError(f'Unsupported model type: {type(self._model)}')
-
-            return loss_dict
+        loss_dict, _ = self._compute_model_output_and_loss(
+            track_x, track_mask, track_ids, det_x, det_mask, det_ids
+        )
+        return loss_dict
 
     def _train_epoch(self, train_loader: 'DataLoader') -> Dict[str, float]:
         """
