@@ -12,7 +12,7 @@ dependencies = [
     "matplotlib>=3.10.3",
     "mmdet>=3.3.0",
     "mmengine>=0.10.0",
-    "motrack>=0.6.0",
+    "motrack[mlflow]==0.7.0",
     "numpy>=1.24.0,<2.0",
     "omegaconf>=2.3.0",
     "opencv-python>=4.11.0.86",

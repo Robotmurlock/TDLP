@@ -4,7 +4,7 @@ import logging
 import time
 
 import hydra
-from motrack.evaluation.io import TrackerInferenceWriter
+from motrack.inference.io import TrackerInferenceWriter
 from motrack.object_detection import DetectionManager
 from motrack.tools.postprocess import run_tracker_postprocess
 from motrack.tools.visualize import run_visualize_tracker_inference

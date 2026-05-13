@@ -4,6 +4,7 @@ outputs/
 .idea/
 .cursor/
 *.mp4
+*secret*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -38,7 +38,6 @@ class TDLPOfflineTracker(TDLPOnlineTracker):
         sim_threshold: float = 0.5,
         initialization_threshold: int = 1,
         remember_threshold: int = 30,
-        clip_length: Optional[int] = None,
         new_tracklet_detection_threshold: float = 0.9,
         use_conf: bool = True
     ):
@@ -52,7 +51,6 @@ class TDLPOfflineTracker(TDLPOnlineTracker):
             sim_threshold: Similarity threshold to use for tracking.
             initialization_threshold: Initialization threshold to use for tracking.
             remember_threshold: Remember threshold to use for tracking.
-            clip_length: Clip length to use for tracking.
             new_tracklet_detection_threshold: New tracklet detection threshold to use for tracking.
             use_conf: Use confidence threshold to filter detections.
 
@@ -68,7 +66,6 @@ class TDLPOfflineTracker(TDLPOnlineTracker):
             sim_threshold=sim_threshold,
             initialization_threshold=initialization_threshold,
             remember_threshold=remember_threshold,
-            clip_length=clip_length,
             new_tracklet_detection_threshold=new_tracklet_detection_threshold,
             use_conf=use_conf
         )
