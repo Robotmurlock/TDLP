@@ -1,0 +1,7 @@
+optimizer:
+  n_trials: 100
+  sampler: tpe
+  sampler_params:
+    gamma: 0.2
+  direction: maximize
+  study_name: dancetrack_tdlp_tpe

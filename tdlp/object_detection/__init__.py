@@ -1,5 +1,7 @@
 """
-Custom object detection implementations registered to the motrack catalog.
-Importing this package registers all detectors so they are available via DetectionManager.
+Historically registered TDLP-side object-detection adapters.
+
+Now empty: as of motrack >= 0.7.0, ``mmdet_yolox`` is shipped and
+registered by motrack itself. This package is kept only as an
+import target for legacy callers (``import tdlp.object_detection``).
 """
-from tdlp.object_detection import mmdet_yolox  # noqa: F401

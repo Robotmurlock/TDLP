@@ -1,0 +1,3 @@
+eval_output: online
+eval_classes: [1]
+distractor_classes: [2, 7, 8, 12]

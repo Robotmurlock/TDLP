@@ -1,5 +1,12 @@
 # Check docker/Dockerfile
 version: "3.9"
+
+networks:
+  # Owned by the Motrack project's compose; declared external so we attach,
+  # never create or destroy. Hosts motrack-mlflow / motrack-env.
+  motrack-net:
+    external: true
+
 services:
   tdlp-env:
     container_name: ${TRAIN_CONT_NAME:-tdlp-env}
@@ -21,9 +28,16 @@ services:
               capabilities: [ gpu ]
           cpus: '${CPUS:-1.0}'
 
+    environment:
+      - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI}
+
+    networks:
+      - motrack-net  # share network with motrack-mlflow / motrack-env
+
     volumes:
       - '/tmp:/tmp'
       - '${DATA}:/media/home'
+      - '/mnt/data:/mnt/data'
       - '${CODE:-$PWD}:/work'
       - '${CLAUDE_CONFIG:-~/.claude}:/root/.claude'
 

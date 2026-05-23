@@ -45,7 +45,6 @@ class TDLPOnlineTracker(Tracker):
         sim_threshold: float = 0.5,
         initialization_threshold: int = 1,
         remember_threshold: int = 30,
-        clip_length: Optional[int] = None,
         new_tracklet_detection_threshold: float = 0.9,
         use_conf: bool = True
     ):
@@ -58,7 +57,6 @@ class TDLPOnlineTracker(Tracker):
             sim_threshold: Similarity threshold to use for tracking.
             initialization_threshold: Initialization threshold to use for tracking.
             remember_threshold: Remember threshold to use for tracking.
-            clip_length: Clip length to use for tracking.
             new_tracklet_detection_threshold: New tracklet detection threshold to use for tracking.
             use_conf: Use confidence threshold to filter detections.
 
@@ -82,7 +80,6 @@ class TDLPOnlineTracker(Tracker):
 
         self._initialization_threshold = initialization_threshold
         self._remember_threshold = remember_threshold
-        self._clip_length = clip_length if clip_length is not None else self._remember_threshold
         self._new_tracklet_detection_threshold = new_tracklet_detection_threshold
 
         self._next_id = 0
@@ -117,19 +114,19 @@ class TDLPOnlineTracker(Tracker):
         N = max(n_tracks, n_detections)
 
         # (2) Observed data conversion
-        observed_ts = torch.zeros(N, self._clip_length, dtype=torch.long)
-        observed_temporal_mask = torch.ones(N, self._clip_length, dtype=torch.bool)
+        observed_ts = torch.zeros(N, self._remember_threshold, dtype=torch.long)
+        observed_temporal_mask = torch.ones(N, self._remember_threshold, dtype=torch.bool)
         observed_features = PredictionBBoxFeatureExtractor.initialize_features(
             feature_names=self._feature_names,
             n_tracks=N,
-            temporal_length=self._clip_length,
+            temporal_length=self._remember_threshold,
         )
 
-        time_offset = frame_index - self._clip_length
+        time_offset = frame_index - self._remember_threshold
         for t_i, tracklet in enumerate(tracklets):
             indices = []
             frame_indices = []
-            bbox_values = []
+            per_frame_data = []
 
             for frame_info in tracklet.history:
                 relative_index = frame_info.frame_index - time_offset
@@ -138,17 +135,21 @@ class TDLPOnlineTracker(Tracker):
 
                 indices.append(relative_index)
                 frame_indices.append(frame_info.frame_index)
-                data = frame_info.data
-                if SupportedFeatures.BBOX in self._feature_names:
-                    bbox_values.append([*data['bbox_xywh'], data['bbox_conf']])
+                per_frame_data.append(frame_info.data)
 
             if not indices:
                 continue
 
             observed_ts[t_i, indices] = torch.tensor(frame_indices, dtype=torch.long)
             observed_temporal_mask[t_i, indices] = False
-            if bbox_values:
-                observed_features['bbox'][t_i, indices, :] = torch.tensor(bbox_values, dtype=torch.float32)
+            for relative_idx, data in zip(indices, per_frame_data):
+                PredictionBBoxFeatureExtractor.set_features(
+                    feature_names=self._feature_names,
+                    features=observed_features,
+                    object_index=t_i,
+                    clip_index=relative_idx,
+                    data=data,
+                )
 
         # (3) Unobserved data conversion
         unobserved_features = PredictionBBoxFeatureExtractor.initialize_features(
@@ -162,9 +163,14 @@ class TDLPOnlineTracker(Tracker):
         unobserved_ts[:n_detections] = frame_index
         unobserved_temporal_mask[:n_detections] = False
 
-        if n_detections > 0 and SupportedFeatures.BBOX in self._feature_names:
-            det_bbox_values = [[*data['bbox_xywh'], data['bbox_conf']] for data in objects_data]
-            unobserved_features['bbox'][:n_detections, 0, :] = torch.tensor(det_bbox_values, dtype=torch.float32)
+        for d_i, data in enumerate(objects_data):
+            PredictionBBoxFeatureExtractor.set_features(
+                feature_names=self._feature_names,
+                features=unobserved_features,
+                object_index=d_i,
+                clip_index=0,
+                data=data,
+            )
 
         # Remove temporal dimension
         unobserved_features = {k: v[:, 0] for k, v in unobserved_features.items()}
@@ -184,6 +190,7 @@ class TDLPOnlineTracker(Tracker):
             )
         )
 
+    @torch.no_grad()
     def _association(
         self,
         tracklets: List[Tracklet],
@@ -337,7 +344,7 @@ class TDLPOnlineTracker(Tracker):
                 frame_index=frame_index,
                 _id=self._next_id,
                 state=TrackletState.NEW if frame_index > self._initialization_threshold else TrackletState.ACTIVE,
-                max_history=self._clip_length - 1,
+                max_history=self._remember_threshold - 1,
                 frame_data=data
             )
             self._next_id += 1

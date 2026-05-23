@@ -1,0 +1,7 @@
+type: tdlp_dancetrack    # resolved via TDLP's DATASET_CATALOG.register
+path: DanceTrack-orig    # appended to path.assets → /media/home/DanceTrack-orig
+params:
+  index_params:
+    paths:
+      - /media/home/DanceTrack-orig/
+  sequence_list: null

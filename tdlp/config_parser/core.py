@@ -129,6 +129,9 @@ class TrainConfig:
     optimizer_config: dict
     scheduler_config: dict
 
+    trainer_type: str = 'default'
+    trainer_params: Optional[dict] = None
+
     gradient_clip: Optional[float] = None
     mixed_precision: bool = False
 

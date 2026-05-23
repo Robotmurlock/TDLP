@@ -1,0 +1,8 @@
+defaults:
+  - bce.yaml
+  - _self_
+
+trainer_type: end_to_end
+trainer_params:
+  n_gradient_frames: 3
+  sim_threshold: 0.5

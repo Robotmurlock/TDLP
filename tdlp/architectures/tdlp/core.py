@@ -6,8 +6,10 @@ from typing import Any, Dict, Optional, Set, Tuple
 
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 from tdlp.architectures.tdlp import utils as tdcp_utils
+from tdlp.architectures.tdlp.base import TDLPModel
 from tdlp.architectures.tdlp.aggregators import TDCPAggregator, tdcp_aggregator_factory
 from tdlp.architectures.tdlp.feature_encoders import feature_encoder_factory
 from tdlp.architectures.tdlp.object_interaction_encoder import ObjectInteractionEncoder
@@ -18,7 +20,7 @@ from tdlp.architectures.tdlp.track_encoder import TrackEncoder
 logger = logging.getLogger('Architecture')
 
 
-class TrackDetectionContrastivePrediction(nn.Module):
+class TrackDetectionContrastivePrediction(TDLPModel):
     """Contrastive model comparing track and detection embeddings."""
 
     def __init__(
@@ -79,8 +81,18 @@ class TrackDetectionContrastivePrediction(nn.Module):
 
         return projected_features, det_features
 
+    def prepare_loss_inputs(self, model_output, track_mask, det_mask, track_ids, det_ids):
+        track_features, det_features = model_output
+        return (track_features, det_features, track_mask, det_mask, None, None, track_ids, det_ids)
 
-class MultiModalTDCP(nn.Module):
+    def compute_cost_matrix(self, model_output, n_tracks, n_dets):
+        track_feat = F.normalize(model_output[0][:, :n_tracks], dim=-1)
+        det_feat = F.normalize(model_output[1][:, :n_dets], dim=-1)
+        sim = torch.bmm(track_feat, det_feat.transpose(1, 2))
+        return 1 - (sim + 1) / 2
+
+
+class MultiModalTDCP(TDLPModel):
     """Multi-modal TDCP wrapper handling per-feature models and aggregation."""
     def __init__(
         self,
@@ -154,8 +166,18 @@ class MultiModalTDCP(nn.Module):
 
         return agg_track_features, agg_det_features, track_features, det_features
 
+    def prepare_loss_inputs(self, model_output, track_mask, det_mask, track_ids, det_ids):
+        agg_track, agg_det, track_dict, det_dict = model_output
+        return (agg_track, agg_det, track_mask, det_mask, track_dict, det_dict, track_ids, det_ids)
 
-class TrackDetectionSimilarityPrediction(nn.Module):
+    def compute_cost_matrix(self, model_output, n_tracks, n_dets):
+        track_feat = F.normalize(model_output[0][:, :n_tracks], dim=-1)
+        det_feat = F.normalize(model_output[1][:, :n_dets], dim=-1)
+        sim = torch.bmm(track_feat, det_feat.transpose(1, 2))
+        return 1 - (sim + 1) / 2
+
+
+class TrackDetectionSimilarityPrediction(TDLPModel):
     """Similarity model comparing track and detection embeddings."""
 
     def __init__(
@@ -183,8 +205,16 @@ class TrackDetectionSimilarityPrediction(nn.Module):
         logits = self._similarity_prediction_head(track_features, det_features)
         return logits
 
+    def prepare_loss_inputs(self, model_output, track_mask, det_mask, track_ids, det_ids):
+        logits = model_output
+        return (logits, track_mask, det_mask, track_ids, det_ids, None)
 
-class MultiModalTDSP(nn.Module):
+    def compute_cost_matrix(self, model_output, n_tracks, n_dets):
+        logits = model_output
+        return 1 - torch.sigmoid(logits[:, :n_tracks, :n_dets])
+
+
+class MultiModalTDSP(TDLPModel):
     """Multi-modal TDSP wrapper handling per-feature models and aggregation."""
     def __init__(
         self,
@@ -230,6 +260,15 @@ class MultiModalTDSP(nn.Module):
         }
 
         return agg_logits, sphs_logits
+
+    def prepare_loss_inputs(self, model_output, track_mask, det_mask, track_ids, det_ids):
+        agg_logits, logits_dict = model_output
+        return (agg_logits, track_mask, det_mask, track_ids, det_ids, logits_dict)
+
+    def compute_cost_matrix(self, model_output, n_tracks, n_dets):
+        agg_logits = model_output[0]
+        return 1 - torch.sigmoid(agg_logits[:, :n_tracks, :n_dets])
+
 
 def build_tdcp_model(
     feature_encoder_type: str = 'motion',

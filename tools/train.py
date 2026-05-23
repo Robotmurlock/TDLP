@@ -6,8 +6,9 @@ from tdlp.common import conventions
 from tdlp.common.project import CONFIGS_PATH
 from tdlp.config_parser import GlobalConfig
 from tdlp.datasets.dataset import MOTClipDataset, dataset_index_factory
+from tdlp.trainer.factory import build_trainer
 from tdlp.trainer.torch_distrib_utils import DistributedSamplerWrapper
-from tdlp.trainer.trainer import ContrastiveTrainer
+from tdlp.trainer.types import TrainerType
 from tdlp.utils import pipeline
 from tools.utils import check_train_experiment_history, logger
 import torch
@@ -72,6 +73,9 @@ def main(cfg: GlobalConfig) -> None:
         experiment_name=cfg.experiment_name
     )
 
+    trainer_type = TrainerType(cfg.train.trainer_type)
+    is_e2e = trainer_type == TrainerType.END_TO_END
+
     train_index = dataset_index_factory(
         name=cfg.dataset.index.type,
         params=cfg.dataset.index.params,
@@ -79,7 +83,7 @@ def main(cfg: GlobalConfig) -> None:
         sequence_list=cfg.dataset.index.sequence_list
     )
 
-    train_dataset = cfg.dataset.build_dataset(train_index)
+    train_dataset = cfg.dataset.build_dataset(train_index, disable_transform=is_e2e)
 
     train_sampler = cfg.dataset.build_sampler(train_dataset)
 
@@ -99,7 +103,7 @@ def main(cfg: GlobalConfig) -> None:
         sequence_list=cfg.dataset.index.sequence_list,
     )
 
-    val_dataset = cfg.dataset.build_dataset(val_index)
+    val_dataset = cfg.dataset.build_dataset(val_index, disable_transform=is_e2e)
 
     val_dataloader = create_dataloader(
         val_dataset,
@@ -128,20 +132,24 @@ def main(cfg: GlobalConfig) -> None:
     tensorboard_log_dirpath = \
         conventions.get_tensorboard_logs_dirpath(cfg.path.master, cfg.dataset_name, cfg.experiment_name)
     checkpoints_dirpath = conventions.get_checkpoints_dirpath(experiment_path)
-    trainer = ContrastiveTrainer(
+
+    transform = cfg.dataset.build_transform() if is_e2e else None
+
+    trainer = build_trainer(
+        trainer_type=trainer_type,
+        trainer_params=cfg.train.trainer_params,
         model=model,
         loss_func=loss_func,
         optimizer=optimizer,
         scheduler=scheduler,
-
         n_epochs=cfg.train.max_epochs,
         gradient_clip=cfg.train.gradient_clip,
         mixed_precision=cfg.train.mixed_precision,
         device=cfg.resources.accelerator,
-
         tensorboard_log_dirpath=tensorboard_log_dirpath,
         checkpoints_dirpath=checkpoints_dirpath,
-        metric_monitor=cfg.train.checkpoint_cfg.metric_monitor
+        metric_monitor=cfg.train.checkpoint_cfg.metric_monitor,
+        transform=transform,
     )
 
     if checkpoint_path is not None:
