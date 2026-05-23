@@ -1,4 +1,5 @@
 """Similarity prediction heads for TDLP."""
+import math
 from typing import Optional
 
 from torch import nn
@@ -145,9 +146,72 @@ class TDSPCompactMLPHead(nn.Module):
         return scores
 
 
+class TDSPConcatMLPHead(nn.Module):
+    """MLP head over plain concatenation [z1, z2] — no absolute-difference term."""
+
+    def __init__(
+        self,
+        input_dim: int,
+        hidden_dim: int,
+    ):
+        super().__init__()
+        self._mlp = nn.Sequential(
+            nn.Linear(2 * input_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, 1),
+        )
+
+    def forward(
+        self,
+        track_features: torch.Tensor,
+        det_features: torch.Tensor,
+    ) -> torch.Tensor:
+        track_features = F.normalize(track_features, dim=-1)
+        det_features = F.normalize(det_features, dim=-1)
+        B, N, E = track_features.shape
+        _, M, _ = det_features.shape
+        t = track_features.unsqueeze(2).expand(B, N, M, E)
+        d = det_features.unsqueeze(1).expand(B, N, M, E)
+        pair = torch.cat([t, d], dim=-1)
+        scores = self._mlp(pair.reshape(B * N * M, 2 * E)).view(B, N, M)
+        return scores
+
+
+class TDSPDotProductHead(nn.Module):
+    """Dot-product head: logit = tau * (z_t . z_d) + bias.
+
+    L2-normalized inputs give cosine similarity in [-1, 1]; a learnable temperature
+    and bias calibrate it for BCE-with-logits. Without calibration the sigmoid
+    would saturate at ~0.73 for perfect matches.
+    """
+
+    def __init__(
+        self,
+        input_dim: int,
+        hidden_dim: Optional[int] = None,  # noqa: ARG002 — kept for factory-signature compatibility
+        init_temperature: float = 4.0,
+    ):
+        super().__init__()
+        self._log_temperature = nn.Parameter(torch.tensor(math.log(init_temperature)))
+        self._bias = nn.Parameter(torch.zeros(1))
+
+    def forward(
+        self,
+        track_features: torch.Tensor,
+        det_features: torch.Tensor,
+    ) -> torch.Tensor:
+        track_features = F.normalize(track_features, dim=-1)
+        det_features = F.normalize(det_features, dim=-1)
+        cos_sim = torch.bmm(track_features, det_features.transpose(1, 2))
+        return cos_sim * torch.exp(self._log_temperature) + self._bias
+
+
 SIMILARITY_HEAD_CATALOG = {
     'mlp': TDSPMLPHead,
     'compact_mlp': TDSPCompactMLPHead,
+    'concat_mlp': TDSPConcatMLPHead,
+    'dot_product': TDSPDotProductHead,
 }
 
 

@@ -126,7 +126,7 @@ class TDLPOnlineTracker(Tracker):
         for t_i, tracklet in enumerate(tracklets):
             indices = []
             frame_indices = []
-            bbox_values = []
+            per_frame_data = []
 
             for frame_info in tracklet.history:
                 relative_index = frame_info.frame_index - time_offset
@@ -135,17 +135,21 @@ class TDLPOnlineTracker(Tracker):
 
                 indices.append(relative_index)
                 frame_indices.append(frame_info.frame_index)
-                data = frame_info.data
-                if SupportedFeatures.BBOX in self._feature_names:
-                    bbox_values.append([*data['bbox_xywh'], data['bbox_conf']])
+                per_frame_data.append(frame_info.data)
 
             if not indices:
                 continue
 
             observed_ts[t_i, indices] = torch.tensor(frame_indices, dtype=torch.long)
             observed_temporal_mask[t_i, indices] = False
-            if bbox_values:
-                observed_features['bbox'][t_i, indices, :] = torch.tensor(bbox_values, dtype=torch.float32)
+            for relative_idx, data in zip(indices, per_frame_data):
+                PredictionBBoxFeatureExtractor.set_features(
+                    feature_names=self._feature_names,
+                    features=observed_features,
+                    object_index=t_i,
+                    clip_index=relative_idx,
+                    data=data,
+                )
 
         # (3) Unobserved data conversion
         unobserved_features = PredictionBBoxFeatureExtractor.initialize_features(
@@ -159,9 +163,14 @@ class TDLPOnlineTracker(Tracker):
         unobserved_ts[:n_detections] = frame_index
         unobserved_temporal_mask[:n_detections] = False
 
-        if n_detections > 0 and SupportedFeatures.BBOX in self._feature_names:
-            det_bbox_values = [[*data['bbox_xywh'], data['bbox_conf']] for data in objects_data]
-            unobserved_features['bbox'][:n_detections, 0, :] = torch.tensor(det_bbox_values, dtype=torch.float32)
+        for d_i, data in enumerate(objects_data):
+            PredictionBBoxFeatureExtractor.set_features(
+                feature_names=self._feature_names,
+                features=unobserved_features,
+                object_index=d_i,
+                clip_index=0,
+                data=data,
+            )
 
         # Remove temporal dimension
         unobserved_features = {k: v[:, 0] for k, v in unobserved_features.items()}

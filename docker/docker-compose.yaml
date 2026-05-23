@@ -37,6 +37,7 @@ services:
     volumes:
       - '/tmp:/tmp'
       - '${DATA}:/media/home'
+      - '/mnt/data:/mnt/data'
       - '${CODE:-$PWD}:/work'
       - '${CLAUDE_CONFIG:-~/.claude}:/root/.claude'
 

@@ -1,7 +1,7 @@
 """Aggregation layers for TDCP models."""
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Sequence
+from typing import Any, Dict, Optional, Sequence
 
 import einops
 import torch
@@ -149,9 +149,34 @@ class TDCPTransformer(nn.Module):
 
 
 
+class TDCPConcatMLPAggregator(TDCPAggregator):
+    """Concatenation followed by an MLP — symmetric counterpart of `linear_sum`.
+
+    Concatenates all per-modality embeddings, then projects through a
+    bottleneck MLP back to `hidden_dim`. Captures cross-modal interactions
+    inside the MLP weights rather than via per-modality projections.
+    """
+    def __init__(self, n_features: int, hidden_dim: int, intermediate_dim: Optional[int] = None):
+        super().__init__(n_features)
+        self._hidden_dim = hidden_dim
+        intermediate_dim = intermediate_dim or hidden_dim
+        self.mlp = nn.Sequential(
+            nn.Linear(n_features * hidden_dim, intermediate_dim),
+            nn.LayerNorm(intermediate_dim),
+            nn.SiLU(),
+            nn.Linear(intermediate_dim, hidden_dim),
+        )
+
+    def forward(self, features: Sequence[Tensor]) -> Tensor:
+        assert len(features) == self.n_features
+        x = torch.cat(list(features), dim=-1)  # [B, M*D]
+        return self.mlp(x)                      # [B, D]
+
+
 TDCP_AGGREGATOR_CATALOG = {
     'sum': TDCPSumAggregator,
     'linear_sum': TDCPLinearSumAggregator,
+    'concat_mlp': TDCPConcatMLPAggregator,
     'static_softmax': TDCPStaticSoftmaxSum,
     'attn': TDCPAttnWeightedSum,
     'query': TDCPQueryAttentionPool,
